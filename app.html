@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Web app · Copytrade Wallet Score</title>
+<meta name="description" content="Use Copytrade Wallet Score in your browser: score Solana wallets, find top traders and check holders without installing anything.">
+<meta property="og:title" content="Web app · Copytrade Wallet Score">
+<meta property="og:description" content="Use Copytrade Wallet Score in your browser: score Solana wallets, find top traders and check holders without installing anything.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#0b0e0d">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<header class="site-head"><div class="wrap">
+  <a class="brand" href="index.html"><img src="icon.png" alt="" width="30" height="30">Copytrade Wallet Score</a>
+  <button class="menu-btn" id="menuBtn" type="button" aria-expanded="false" aria-controls="siteNav">Menu</button>
+  <nav class="nav" id="siteNav" aria-label="Main"><a href="features.html">Features</a><a href="app.html" aria-current="page">Web app</a><a href="getting-started.html">Getting started</a><a href="faq.html">FAQ</a><a href="privacy.html">Privacy</a><a class="btn btn-primary" href="getting-started.html#install">Add to Chrome</a></nav>
+</div></header>
+<main id="main">
+
+<div class="page-head"><div class="wrap"><span class="eyebrow">Web app</span><h1 style="font-size:clamp(36px,5vw,56px)">Use it right here</h1><p class="lead">The full extension, running in this browser tab: wallet scores, wallet lists, Top traders, Holders, Automatic and History. Add your free Helius key in the menu (three lines, top right) to start.</p></div></div>
+<div class="wrap app-grid">
+  <aside class="app-notes">
+    <h3>Before you start</h3>
+    <ol>
+      <li>Get a free key at <a href="https://www.helius.dev" target="_blank" rel="noopener">helius.dev</a> (API Keys).</li>
+      <li>Open the menu in the app (three lines, top right) and paste it under Helius API keys.</li>
+      <li>Paste a wallet, or a list of wallets, and press Score.</li>
+    </ol>
+    <h3>Good to know</h3>
+    <ul>
+      <li>Your key and results are saved in this browser only, for this site. Nothing goes to a server of ours.</li>
+      <li>Same Helius credits as the extension: about 100+ per new wallet.</li>
+      <li>Keep this tab open while a scan runs.</li>
+    </ul>
+    <h3>Extension only</h3>
+    <ul>
+      <li>Score badge and labels on GMGN wallet pages</li>
+      <li>Auto-checking the wallet or token page you have open</li>
+      <li>Side panel next to any site</li>
+    </ul>
+    <p class="hero-cta" style="margin-top:6px"><a class="btn btn-ghost" href="getting-started.html#install">Get the extension</a></p>
+    <p class="app-small">Data saved by the extension and by the web app is separate; each keeps its own history.</p>
+  </aside>
+  <div class="app-frame-wrap">
+    <iframe class="app-frame" id="appFrame" src="app-panel.html" title="Copytrade Wallet Score web app"></iframe>
+    <p class="app-small">Works best on a computer. On a phone, scroll inside the app.</p>
+  </div>
+</div>
+
+</main>
+<footer class="site-foot"><div class="wrap">
+  <div><a class="brand" href="index.html"><img src="icon.png" alt="" width="30" height="30">Copytrade Wallet Score</a>
+    <p style="margin-top:12px;max-width:34ch">A Chrome extension that scores Solana wallets for copy trading and finds the filters that work.</p></div>
+  <div><h4>Product</h4><ul><li><a href="features.html">Features</a></li><li><a href="app.html">Web app</a></li><li><a href="features.html#scoring">How scoring works</a></li><li><a href="getting-started.html">Getting started</a></li></ul></div>
+  <div><h4>Help</h4><ul><li><a href="faq.html">FAQ</a></li><li><a href="getting-started.html#credits">Helius credits</a></li><li><a href="getting-started.html#install">Install</a></li></ul></div>
+  <div><h4>Legal</h4><ul><li><a href="privacy.html">Privacy policy</a></li><li><a href="terms.html">Terms of use</a></li></ul></div>
+  <div class="fine"><span>© 2026 Copytrade Wallet Score. All rights reserved. Not financial advice.</span><span>Not affiliated with GMGN, Helius, GeckoTerminal or Binance.US.</span></div>
+</div></footer>
+<script>
+(function(){var b=document.getElementById('menuBtn'),n=document.getElementById('siteNav');if(!b||!n)return;
+b.addEventListener('click',function(){var o=n.classList.toggle('open');b.setAttribute('aria-expanded',o?'true':'false')});})();
+</script>
+</body>
+</html>

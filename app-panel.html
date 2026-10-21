@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Copytrade Wallet Score app</title>
+<link rel="stylesheet" href="panel.css">
+<style>
+/* web app: extension-only controls are hidden */
+#popout,#dock,#upd,#keepopen,#fromtab,#ttfromtab,#ttkeep,
+label:has(> #autotab),label:has(> #gmgn),label:has(> #ttautotok){display:none!important}
+html,body{min-height:100%}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><img src="icon.png" alt="" width="18" height="18"> Wallet Score <span id="ver" class="ver"></span></div>
+  <button type="button" id="upd" class="upd" hidden>New version available</button>
+  <div class="hbtns">
+  <button type="button" id="popout" class="icon" aria-label="Open in its own window" title="Open in its own window (stays open while you browse)">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>
+  </button>
+  <button type="button" id="dock" class="icon" aria-label="Open in side panel" title="Open in Chrome's side panel">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg>
+  </button>
+  <button type="button" id="gear" class="icon menubtn" aria-label="Menu and settings" aria-expanded="false" aria-controls="settings" title="Menu and settings">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+  </button>
+  </div>
+</header>
+
+<section id="settings" class="card menu" hidden role="dialog" aria-label="Settings">
+  <div class="mhead"><b>Settings</b><button type="button" id="setclose" class="icon" aria-label="Close settings">×</button></div>
+  <details class="mgrp" open><summary>Helius API keys</summary>
+    <div class="fld"><span class="hint">When one runs out of credits, the next is used.</span>
+      <div id="hklist" class="hklist"></div>
+      <button type="button" id="hkadd" class="ghost hkadd">+ Add another key</button>
+    </div>
+  </details>
+  <details class="mgrp"><summary>Analysis</summary>
+    <label class="fld">Min trades per filter
+      <input type="number" id="minn" min="3" step="1" value="10">
+    </label>
+    <label class="fld">Your bot's fill gap (%)
+      <input type="number" id="slip" min="0" max="100" step="1" value="0">
+      <span class="hint">How much higher your bot buys than the wallet. Scores count it.</span>
+    </label>
+    <label class="fld">Max trades per token
+      <select id="maxr"><option value="0">All</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="5">5</option></select>
+      <span class="hint">If it sells out of a token and buys again, how many of those trades your bot copies.</span>
+    </label>
+    <label class="chk"><input type="checkbox" id="openloss" checked> Count never-sold tokens as losses <span class="hint">(only when today's price isn't available; otherwise they're valued at today's price)</span></label>
+    <label class="chk"><input type="checkbox" id="nodev"> Leave out tokens this wallet created <span class="tag devt">DEV</span></label>
+    <label class="chk"><input type="checkbox" id="autocheck"> Check round-trips &amp; entry spikes automatically <span class="hint">(about 20 Helius credits per token)</span></label>
+    <label class="chk"><input type="checkbox" id="chkall" checked> Check spikes &amp; round-trips on all analyzed tokens <span class="hint">(not just the ones in filters, so every token can get a label on GMGN; the score still only uses tokens in filters)</span></label>
+    <label class="chk"><input type="checkbox" id="gmgn" checked> Show Wallet Score on GMGN pages <span class="hint">(score, filters and token tags on wallet pages)</span></label>
+    <label class="fld">Only check wallets scoring at least<input type="number" id="rsmin" min="0" max="100" step="5" placeholder="any (every wallet)"><span class="hint">Applies to the round-trip &amp; spike check in every tab.</span></label>
+  </details>
+  <details class="mgrp" id="lsgrp"><summary>Storage</summary>
+    <div class="lstot"><div class="lsbar"><i id="lsbar"></i></div><span id="lsmeter" class="hint"></span></div>
+    <label class="chk"><input type="checkbox" id="lsauto" checked> Free up space automatically when storage is almost full</label>
+    <div id="lscats" class="lscats"></div>
+    <div class="lsfoot"><button type="button" id="lsfree" class="ghost">Free up space now</button><span id="lsidb" class="hint"></span></div>
+  </details>
+  <details class="mgrp" id="scgrp"><summary>Scoring</summary>
+    <label class="chk scauto"><input type="checkbox" id="scauto" checked> <span><b>Automatic scoring</b> <span class="hint">the built-in rules. Untick to customize every rule below.</span></span></label>
+    <div id="scrules" class="scrules"></div>
+    <div class="scfoot"><button type="button" id="screset" class="ghost">Reset to defaults</button><span id="scnote" class="hint"></span></div>
+  </details>
+  <div class="setfoot">
+    <span id="setnote" class="hint"></span>
+  </div>
+</section>
+
+<nav class="tabs" role="tablist">
+  <button type="button" role="tab" data-v="wallet" class="on" aria-selected="true">Wallet</button>
+  <button type="button" role="tab" data-v="tt" aria-selected="false">Top traders</button>
+  <button type="button" role="tab" data-v="ms" aria-selected="false">Automatic</button>
+  <button type="button" role="tab" data-v="hist" aria-selected="false">History</button>
+</nav>
+
+<div id="vwallet">
+<form id="form" autocomplete="off">
+  <input type="text" id="addr" placeholder="Paste a Solana wallet (or a list, one per line)" spellcheck="false" aria-label="Wallet address">
+  <button type="submit" id="go">Score</button>
+</form>
+<div class="wrow"><label class="lastn">Analyze tokens <input type="number" id="lastn" min="5" step="5" value="50"></label>
+<div class="wchks"><label class="chk autotab" title="When the GMGN tab you're on shows a wallet page (or a token page filtered to a wallet), score that wallet right away. Saved wallets open free and only fetch new trades."><input type="checkbox" id="autotab"> Auto-check the wallet page I'm on</label>
+<label class="chk autotab" title="Run the round-trip &amp; spike check on every wallet you analyze (about 20 Helius credits per token)"><input type="checkbox" id="wautochk"> Auto-check spikes &amp; round-trips</label>
+<label class="wscope" title="Which tokens the spike &amp; round-trip check covers (automatic or with the Check button). Tokens in filters are the ones that count in the score; all tokens also gives every token a label on GMGN.">Check <select id="wchkscope"><option value="all">all analyzed tokens</option><option value="kept">only tokens in filters</option></select></label></div></div>
+<button type="button" id="fromtab" class="suggest" hidden></button>
+<div id="hist" class="chips"></div>
+<p id="status" class="status" role="status"></p>
+<section id="wbatch" class="card wbatch" hidden>
+  <div class="wbhead"><b id="wbtitle"></b><span class="wbbtns"><button type="button" id="wbstop" class="ghost" hidden>Stop</button><button type="button" id="wbclose" class="icon" title="Close this list" aria-label="Close">×</button></span></div>
+  <p id="wbsub" class="hint"></p>
+  <div id="wblist" class="wblist"></div>
+</section>
+<p id="keepopen" class="hint" hidden>Keep this popup open until the pull finishes, or use the window button above.</p>
+
+<main id="res" hidden>
+  <div class="periodbar"><span class="hint">Tokens from</span>
+    <span class="seg" id="period" role="group" aria-label="Period"><button type="button" data-d="7">7 days</button><button type="button" data-d="14">14 days</button><button type="button" data-d="30">30 days</button><button type="button" data-d="0" class="on" title="Everything pulled: the extension only ever looks at the last 31 days">All (31d)</button></span>
+  </div>
+  <p id="periodnote" class="hint periodnote"></p>
+  <section class="card scorecard">
+    <div class="ring" id="ring">
+      <svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="50" class="trk"/><circle cx="60" cy="60" r="50" class="val" id="ringval"/></svg>
+      <div class="num"><b id="score">–</b><span>/100</span></div>
+    </div>
+    <div class="verdict">
+      <div id="grade" class="grade"></div>
+      <div id="why" class="why"></div>
+      <a id="wlink" class="wlink" target="_blank" rel="noopener"></a>
+    </div>
+  </section>
+
+  <section class="card" id="cmpcard" hidden>
+    <div class="ctitle">With filters vs all trades</div>
+    <div id="cmp" class="cmp"></div>
+  </section>
+
+  <section class="card">
+    <div class="ctitle">Recommended filters <span class="hint">tap a value to copy</span></div>
+    <div class="fgrid" id="filters"></div>
+    <div class="kpis" id="kpis"></div>
+  </section>
+
+  <section class="card" id="plcard" hidden>
+    <div class="ctitle">Platforms <span class="hint">tap to leave one out</span></div>
+    <div id="plbody"></div>
+  </section>
+
+  <section class="card" id="szcard" hidden>
+    <div class="ctitle">Buy size &amp; market cap <span class="hint">all analyzed trades</span></div>
+    <div id="szbody"></div>
+  </section>
+
+
+  <section class="card" id="recard" hidden>
+    <div class="ctitle">Re-entries <span class="hint">max trades per token</span></div>
+    <div id="rebody"></div>
+  </section>
+
+  <section class="card" id="rtcard">
+    <div class="ctitle">Round-trips &amp; entry spikes</div>
+    <div id="rtbody"></div>
+  </section>
+
+  <section class="card">
+    <div class="ctitle">Tokens
+      <span class="seg" id="tokseg" role="group" aria-label="Show">
+        <button type="button" data-v="kept" class="on">In filters</button><button type="button" data-v="all">All</button>
+      </span>
+    </div>
+    <div id="toks" class="toks"></div>
+  </section>
+  <p id="foot" class="hint foot"></p>
+</main>
+</div>
+
+<div id="vtt" hidden>
+  <div class="seg ttmode" id="ttmode" role="group" aria-label="Check"><button type="button" data-m="tt" class="on">Top traders</button><button type="button" data-m="holders">Holders</button></div>
+  <form id="ttform" autocomplete="off">
+    <input type="text" id="ttmint" placeholder="Token address or GMGN link (commas for several)" spellcheck="false" aria-label="Token address">
+    <button type="submit" id="ttgo">Find</button>
+  </form>
+  <button type="button" id="ttfromtab" class="suggest" hidden></button>
+  <label class="chk ttauto" title="When the GMGN tab you're on switches to another token, check it right away (Top traders or Holders, whichever is selected)"><input type="checkbox" id="ttautotok"> Auto-check tokens I open on GMGN</label>
+  <div class="ttopts" id="ttopts-tt">
+    <label>Show <select id="ttn"><option value="25">Top 25</option><option value="50" selected>Top 50</option><option value="75">Top 75</option><option value="100">Top 100</option></select></label>
+    <label title="Only score traders whose realized profit on this token is at least this much (leave blank to score everyone)">Min PnL <input type="number" id="ttminroi" step="any" placeholder="any" style="width:56px"><select id="ttminmode" title="Count Min PnL as a % return or as SOL profit"><option value="pct">%</option><option value="sol">SOL</option></select></label>
+    <label title="Skip traders who bought this token more times than this (leave blank for no limit). Wallets that buy the same token over and over are hard to copy.">Max buys <input type="number" id="ttmaxb" min="1" step="1" placeholder="any" style="width:52px"></label>
+    <label>Read up to <select id="ttdepth"><option value="50">5,000 trades · 500 cr</option><option value="100" selected>10,000 trades · 1,000 cr</option><option value="200">20,000 trades · 2,000 cr</option><option value="500">50,000 trades · 5,000 cr</option></select></label>
+    <label title="While scoring, check this many of each wallet's newest tokens for round-trips and entry spikes (about 20 Helius credits per token). Counts in the score.">Round-trips &amp; spikes <select id="ttrs"><option value="0">Off</option><option value="10">10 tokens · ~200 cr</option><option value="25">25 tokens · ~500 cr</option></select></label>
+    <label title="Only run the round-trip &amp; spike check on wallets that already score at least this much (blank = every wallet). Saves credits on weak wallets.">only if score ≥ <input type="number" id="ttrsmin" min="0" max="100" step="5" placeholder="any" style="width:52px"></label>
+    <label class="chk" title="As soon as a search finishes, score every trader it found (about 100 Helius credits per wallet; wallets already scored are free)"><input type="checkbox" id="ttauto"> Auto-score all found wallets</label>
+    <label class="chk" title="Also run the round-trip &amp; spike check while auto-scoring (slower, more credits). Off: quick scores now, then use Check spikes &amp; round-trips when you want it."><input type="checkbox" id="ttautors"> Include round-trips &amp; spikes when auto-scoring</label>
+  </div>
+  <div class="ttopts" id="hdopts" hidden>
+    <label>Show top <select id="hdn"><option value="25">25</option><option value="50">50</option><option value="100">100</option></select> holders</label>
+    <label class="chk" title="Each holder's first transactions: wallet age (Fresh wallet) and who funded it (Same funder, Insider). About 10 Helius credits per holder."><input type="checkbox" id="hddeep" checked> Check wallet age &amp; funders <span class="hint">(~10 credits each)</span></label>
+    <span class="hint">History read: uses "Read up to" from Top traders.</span>
+  </div>
+  <p id="ttstatus" class="status" role="status"></p>
+  <p id="ttkeep" class="hint" hidden>Keep this open while it works, or use the window button above.</p>
+  <section class="card" id="ttres" hidden>
+    <div class="ctitle"><span id="tthead">Top traders</span>
+      <span class="seg" role="group" aria-label="Sort"><button type="button" data-s="pnl" class="on">Profit</button><button type="button" data-s="score">Score</button></span>
+    </div>
+    <p id="ttsub" class="hint" style="margin:-4px 0 8px"></p>
+    <div class="ttbar"><button type="button" id="ttscore" class="run"></button><button type="button" id="ttrsall" class="run alt" hidden></button><button type="button" id="ttstop" class="ghost" hidden>Stop</button></div>
+    <div id="ttcred" class="credbox" hidden title="Approximate Helius credits used by Top traders (searches and scoring)"></div>
+    <div id="ttlist" class="ttlist"></div>
+  </section>
+  <section class="card" id="hdres" hidden>
+    <div class="ctitle"><span id="hdhead">Holders</span></div>
+    <p id="hdsub" class="hint" style="margin:-4px 0 8px"></p>
+    <div id="hdsum" class="hdsum"></div>
+    <div id="hdchips" class="hdchips"></div>
+    <div id="hdlist" class="hdlist"></div>
+  </section>
+</div>
+
+<div id="vhist" hidden>
+  <section class="card">
+    <div class="ctitle">History
+      <span class="seg" role="group" aria-label="Sort"><button type="button" data-s="new" class="on">Newest</button><button type="button" data-s="score">Score</button></span>
+    </div>
+    <div class="seg hiview" id="hiview" role="group" aria-label="Show"><button type="button" data-v="all" class="on">All</button><button type="button" data-v="tt">Top traders</button><button type="button" data-v="hd">Holders</button></div>
+    <p id="hisub" class="hint" style="margin:-4px 0 8px"></p>
+    <input type="text" id="hiq" placeholder="Search an address" spellcheck="false" aria-label="Search history">
+    <div class="ttbar" style="margin:8px 0"><button type="button" id="hicopy" class="ghost" hidden>Copy 90+ wallets</button><button type="button" id="hiclear" class="ghost" hidden>Clear history</button></div>
+    <div id="hilist" class="hilist"></div>
+  </section>
+</div>
+
+<div id="vms" hidden>
+  <section class="card">
+    <div class="ctitle">Import tokens <span class="hint">one address, or many separated by commas</span></div>
+    <textarea id="ms-imp" rows="2" placeholder="Paste token addresses or GMGN links, e.g. Fc4i…pump, Hpu4…pump" spellcheck="false"></textarea>
+    <div class="ttbar" style="margin:6px 0 0"><button type="button" id="ms-impgo" class="run">Scan imported</button><span id="ms-impcount" class="hint"></span></div>
+    <label class="chk"><input type="checkbox" id="ms-impf"> Apply my filters to imported tokens <span class="hint">(off: scan them as long as they aren't honeypots or mint/freeze scams)</span></label>
+  </section>
+  <section class="card msrs">
+    <label class="rsline"><span><b>Round-trip &amp; spike check</b><span class="hint">Checks each trader's newest tokens while scoring, for imported and automatic scans. About 20 credits per token.</span></span>
+      <select id="ms-rs"><option value="0">Off</option><option value="10">10 tokens per trader</option><option value="25">25 tokens per trader</option></select></label>
+    <label class="rsline rsmin"><span><b>Only if score ≥</b><span class="hint">Skip the check for weaker wallets to save credits. Blank = every wallet.</span></span><input type="number" id="ms-rsmin" min="0" max="100" step="5" placeholder="any"></label>
+  </section>
+  <section class="card msset">
+    <div class="ctitle">Automatic scanner <button type="button" id="ms-setfold" class="linkbtn" aria-expanded="true">hide</button></div>
+    <div id="ms-setbody">
+    <p class="hint" style="margin:-4px 0 8px">Finds migrated tokens that pass your filters, then scores their top traders.</p>
+    <div class="msgrid">
+      <label class="fld">Min market cap ($)<input type="number" id="ms-mc" min="0" step="1000"></label>
+      <label class="fld">Max market cap ($)<input type="number" id="ms-mcmax" min="0" step="10000" placeholder="no max"></label>
+      <label class="fld">Min 24h volume ($)<input type="number" id="ms-vol" min="0" step="10000"></label>
+      <label class="fld">Min holders<input type="number" id="ms-holders" min="0" step="50" placeholder="any"></label>
+      <label class="fld">Min token age (hours)<input type="number" id="ms-age" min="0" step="0.5"></label>
+      <label class="fld">Min total fees (SOL)<input type="number" id="ms-fees" min="0" step="0.5"></label>
+      <label class="fld">Tokens per run<input type="number" id="ms-n" min="1" max="20" step="1"></label>
+      <label class="fld">Traders scored per token<input type="number" id="ms-k" min="1" max="50" step="1"></label>
+      <label class="fld">Trader min PnL on token (%)<input type="number" id="ms-roi" step="10" placeholder="any"></label>
+      <label class="fld">Read up to<select id="ms-depth"><option value="30">3,000 trades</option><option value="50">5,000 trades</option><option value="100">10,000 trades</option><option value="200">20,000 trades</option></select></label>
+      <label class="fld">Skip tokens checked in last (hours)<input type="number" id="ms-skip" min="0" step="1"></label>
+      <label class="fld">Repeat automatically<select id="ms-auto"><option value="0">Off</option><option value="15">Every 15 min</option><option value="30">Every 30 min</option><option value="60">Every hour</option></select></label>
+    </div>
+    <div class="ctitle" style="margin:10px 0 6px">Scam filters</div>
+    <div class="msgrid">
+      <label class="fld">Max dev holding (%)<input type="number" id="ms-devmax" min="0" step="1" placeholder="any"></label>
+      <label class="fld">Max top 10 holding (%)<input type="number" id="ms-top10" min="0" step="5" placeholder="any"></label>
+    </div>
+    <label class="chk" style="margin-top:6px"><input type="checkbox" id="ms-active"> Only tokens traded in the last 10 minutes</label>
+    <p class="hint" style="margin:4px 0 0">Always skipped: honeypots, tokens whose dev can still mint or freeze, and very low GeckoTerminal trust scores.</p>
+    <div class="msplat"><span class="hint">Migrated to:</span>
+      <label class="chk"><input type="checkbox" id="ms-p-pumpswap"> PumpSwap</label>
+      <label class="chk"><input type="checkbox" id="ms-p-meteora-damm-v2"> Meteora DAMM v2</label>
+      <label class="chk"><input type="checkbox" id="ms-p-raydium"> Raydium</label>
+    </div>
+    <p id="ms-est" class="tipline"></p>
+    </div>
+    <div class="ttbar"><button type="button" id="ms-go" class="run go">Start scan</button><button type="button" id="ms-stop" class="ghost" hidden>Stop</button><span id="ms-next" class="hint"></span></div>
+    <p id="ms-cred" class="hint" style="margin:2px 0 0"></p>
+  </section>
+  <section class="card">
+    <div class="ctitle">Log <span><button type="button" id="ms-clearlog" class="linkbtn">clear</button> <button type="button" id="ms-logfold" class="linkbtn" aria-expanded="true">hide</button></span></div>
+    <div id="ms-log" class="mslog"></div>
+  </section>
+  <section class="card" id="ms-trcard" hidden>
+    <div class="ctitle"><span id="ms-trhead">Traders found</span>
+      <span class="seg" role="group" aria-label="Sort"><button type="button" data-s="score" class="on">Score</button><button type="button" data-s="pnl">Profit</button><button type="button" data-s="hits">Tokens</button></span>
+    </div>
+    <p class="hint" id="ms-trsub" style="margin:-4px 0 8px"></p>
+    <div class="mstools">
+      <label>Min score <input type="number" id="ms-minsc" min="0" max="100" step="5" placeholder="any"></label>
+      <label class="chk"><input type="checkbox" id="ms-nomulti"> Hide Multi-Wallet</label>
+      <span class="sp"></span>
+      <button type="button" id="ms-copy90" class="linkbtn" title="Copy the addresses of listed wallets scoring 90+">copy 90+</button>
+      <button type="button" id="ms-copy" class="linkbtn" title="Copy the addresses of every listed wallet">copy all</button>
+      <button type="button" id="ms-trclear" class="linkbtn" title="Clear this list (scores are kept)">clear</button>
+    </div>
+    <div id="ms-trlist" class="ttlist"></div>
+  </section>
+  <section class="card" id="ms-tkcard" hidden>
+    <div class="ctitle">Tokens checked <button type="button" id="ms-reset" class="linkbtn" title="Forget checked tokens and found traders">reset</button></div>
+    <div id="ms-tklist" class="mstk"></div>
+  </section>
+</div>
+
+<script>window.WS_WEB_VERSION="1.24.0"</script>
+<script src="app-shim.js"></script>
+<script src="engine.js"></script>
+<script src="panel.js"></script>
+<script src="topt.js"></script>
+<script src="tt.js"></script>
+<script src="ms.js"></script>
+<script src="holders.js"></script>
+<script src="hist.js"></script>
+</body>
+</html>
