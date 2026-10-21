@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FAQ · Copytrade Wallet Score</title>
+<meta name="description" content="Answers to common questions about Copytrade Wallet Score.">
+<meta property="og:title" content="FAQ · Copytrade Wallet Score">
+<meta property="og:description" content="Answers to common questions about Copytrade Wallet Score.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#0b0e0d">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<header class="site-head"><div class="wrap">
+  <a class="brand" href="index.html"><img src="icon.png" alt="" width="30" height="30">Copytrade Wallet Score</a>
+  <button class="menu-btn" id="menuBtn" type="button" aria-expanded="false" aria-controls="siteNav">Menu</button>
+  <nav class="nav" id="siteNav" aria-label="Main"><a href="features.html">Features</a><a href="getting-started.html">Getting started</a><a href="faq.html" aria-current="page">FAQ</a><a href="privacy.html">Privacy</a><a class="btn btn-primary" href="getting-started.html#install">Add to Chrome</a></nav>
+</div></header>
+<main id="main">
+
+<div class="page-head"><div class="wrap"><span class="eyebrow">FAQ</span><h1 style="font-size:clamp(36px,5vw,56px)">Frequently asked questions</h1><p class="lead">Can't find an answer? Use the Support tab on the Chrome Web Store listing.</p></div></div>
+<section style="padding-top:40px"><div class="wrap"><div class="faq" style="max-width:860px"><details><summary>Is it free?</summary><div class="ans"><p>Yes. The extension is free. It needs your own Helius API key; Helius has a free plan that covers regular use.</p></div></details><details><summary>Do I need an account?</summary><div class="ans"><p>No. There is no sign-up. Install it, paste a Helius key, and start.</p></div></details><details><summary>Can it trade, sign or move funds?</summary><div class="ans"><p>No. It only reads public blockchain data. It never connects to a wallet and has no way to sign transactions.</p></div></details><details><summary>Where does the data come from?</summary><div class="ans"><p>Trades come from the Solana blockchain through Helius. Token prices come from GeckoTerminal and SOL prices from Binance.US.</p></div></details><details><summary>Why only the last 31 days?</summary><div class="ans"><p>A copier cares about how a wallet trades now. Older trades are never fetched, which also saves credits and storage, and a wallet back from a long break is judged only on its new trades.</p></div></details><details><summary>What counts as a win?</summary><div class="ans"><p>A trade that made +20% or more. Smaller gains count against the win rate, because after fees and slippage a copier rarely keeps them.</p></div></details><details><summary>Why did a wallet score lower in the Wallet tab than in Top traders?</summary><div class="ans"><p>Top traders runs a quick scan to keep large lists fast and cheap. The Wallet tab runs the full analysis and fetches newer trades, and a note under the score explains what changed.</p></div></details><details><summary>Can I change how the score is calculated?</summary><div class="ans"><p>Yes. In Settings → Scoring, switch from Automatic to Custom and change any rule, threshold or number of points, or turn rules off.</p></div></details><details><summary>Does it work on GMGN?</summary><div class="ans"><p>Yes. On gmgn.ai wallet pages it shows the score badge and token labels for wallets you analyzed. It only reads the page and can be turned off.</p></div></details><details><summary>Is my data private?</summary><div class="ans"><p>Yes. Everything is stored in your browser. The developer runs no server and collects nothing. See the privacy policy for details.</p></div></details><details><summary>Is the score financial advice?</summary><div class="ans"><p>No. Scores and filters are estimates from past trades, and past results don't guarantee future ones.</p></div></details></div></div></section>
+
+</main>
+<footer class="site-foot"><div class="wrap">
+  <div><a class="brand" href="index.html"><img src="icon.png" alt="" width="30" height="30">Copytrade Wallet Score</a>
+    <p style="margin-top:12px;max-width:34ch">A Chrome extension that scores Solana wallets for copy trading and finds the filters that work.</p></div>
+  <div><h4>Product</h4><ul><li><a href="features.html">Features</a></li><li><a href="features.html#scoring">How scoring works</a></li><li><a href="getting-started.html">Getting started</a></li></ul></div>
+  <div><h4>Help</h4><ul><li><a href="faq.html">FAQ</a></li><li><a href="getting-started.html#credits">Helius credits</a></li><li><a href="getting-started.html#install">Install</a></li></ul></div>
+  <div><h4>Legal</h4><ul><li><a href="privacy.html">Privacy policy</a></li><li><a href="terms.html">Terms of use</a></li></ul></div>
+  <div class="fine"><span>© 2026 Copytrade Wallet Score. Not financial advice.</span><span>Not affiliated with GMGN, Helius, GeckoTerminal or Binance.US.</span></div>
+</div></footer>
+<script>
+(function(){var b=document.getElementById('menuBtn'),n=document.getElementById('siteNav');if(!b||!n)return;
+b.addEventListener('click',function(){var o=n.classList.toggle('open');b.setAttribute('aria-expanded',o?'true':'false')});})();
+</script>
+</body>
+</html>

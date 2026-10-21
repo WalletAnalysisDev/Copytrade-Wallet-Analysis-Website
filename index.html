@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Copytrade Wallet Score</title>
+<meta name="description" content="Score Solana wallets for copy trading: a 0–100 score from real trades, the filters that work, and every red flag a copier pays for.">
+<meta property="og:title" content="Copytrade Wallet Score">
+<meta property="og:description" content="Score Solana wallets for copy trading: a 0–100 score from real trades, the filters that work, and every red flag a copier pays for.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#0b0e0d">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<header class="site-head"><div class="wrap">
+  <a class="brand" href="index.html"><img src="icon.png" alt="" width="30" height="30">Copytrade Wallet Score</a>
+  <button class="menu-btn" id="menuBtn" type="button" aria-expanded="false" aria-controls="siteNav">Menu</button>
+  <nav class="nav" id="siteNav" aria-label="Main"><a href="features.html">Features</a><a href="getting-started.html">Getting started</a><a href="faq.html">FAQ</a><a href="privacy.html">Privacy</a><a class="btn btn-primary" href="getting-started.html#install">Add to Chrome</a></nav>
+</div></header>
+<main id="main">
+
+<section class="hero"><div class="wrap">
+  <div class="hero-copy">
+    <span class="eyebrow">Chrome extension · Solana</span>
+    <h1>Know which wallets are worth <em>copying</em> before your bot does.</h1>
+    <p class="lead">Paste any Solana wallet and get a 0–100 copy score from its real trades, the market-cap and buy-size filters that actually work for it, and every red flag a copier pays for.</p>
+    <div class="hero-cta"><a class="btn btn-primary" href="getting-started.html#install">Add to Chrome</a><a class="btn btn-ghost" href="features.html">See what it checks</a></div>
+    <p class="hero-note">Free. Runs in your browser with your own free Helius API key. No account, no tracking.</p>
+    <div class="chips" aria-label="Labels the extension adds"><span class="chip in">In filter</span><span class="chip dev">DEV</span><span class="chip spike">Spike +38%</span><span class="chip rt">RT +164%</span><span class="chip qs">QuickSell Low MC</span><span class="chip out">Out of filter</span></div>
+  </div>
+  <div class="scorecard" role="img" aria-label="Example score card: 86 out of 100, Excellent to copy">
+    <div class="sc-top">
+      <div class="dial"><div><b>86</b><small>/100</small></div></div>
+      <div class="sc-grade"><strong>Excellent to copy</strong><span>Wins 8 of 11 trades inside its filters</span><span class="sc-addr">7xKq…T5oD</span></div>
+    </div>
+    <ul class="sc-lines">
+      <li><span class="p">73</span><span>win rate inside the filters (win = +20% or more)</span></li>
+      <li><span class="p pos">+15</span><span>win rate 73% in filters (over 50%)</span></li>
+      <li><span class="p pos">+10</span><span>filters: +6.2 SOL vs +1.8 SOL without (3.4×)</span></li>
+      <li><span class="p pos">+3</span><span>~130 trades in 7 days (64 buys)</span></li>
+      <li><span class="p neg">−10</span><span>last 7 days: 40% win over 10 trades</span></li>
+      <li><span class="p neg">−5</span><span>12% of tokens held under 10s</span></li>
+    </ul>
+    <div class="sc-filters"><div><span>Min MC</span><b>$7K</b></div><div><span>Max MC</span><b>$40K</b></div><div><span>Min buy</span><b>0.5 SOL</b></div><div><span>Max buy</span><b>2 SOL</b></div></div>
+    <p class="sc-cap">Example wallet for illustration</p>
+  </div>
+</div></section>
+
+<section style="padding-top:0"><div class="wrap">
+  <div class="facts">
+    <div><b class="num">0–100</b><span>copy score from the last 31 days of trades</span></div>
+    <div><b class="num">18</b><span>scoring rules, every one editable</span></div>
+    <div><b class="num">+20%</b><span>what counts as a win, so tiny gains don't inflate it</span></div>
+    <div><b class="num">0</b><span>servers, accounts or trackers</span></div>
+  </div>
+</div></section>
+
+<section class="band"><div class="wrap">
+  <div class="sec-head"><span class="eyebrow">How it works</span><h2>From wallet address to bot filters in under a minute</h2></div>
+  <ol class="steps">
+    <li><h3>Add your Helius key</h3><p>Sign up free at helius.dev and paste the key into the extension's settings. It stays in your browser.</p></li>
+    <li><h3>Paste a wallet</h3><p>Or a whole list. The extension pulls up to 50 of its newest tokens from the last 31 days and works out every trade.</p></li>
+    <li><h3>Copy the filters</h3><p>Get the score, why it scored that way, and the min/max market cap and buy size to paste into your copy bot.</p></li>
+  </ol>
+</div></section>
+
+<section><div class="wrap">
+  <div class="sec-head"><span class="eyebrow">Showcase</span><h2>Everything you check by hand on GMGN, done for you</h2></div>
+
+  <div class="feature">
+    <div class="feature-copy"><span class="eyebrow">Wallet score</span><h3 style="font-size:28px">A score you can read line by line</h3>
+      <p class="lead" style="font-size:17px">The score starts at the wallet's win rate inside its best filters, then every bonus and penalty is listed, so you always know why.</p>
+      <ul><li><b>With filters vs all trades</b> side by side: trades, win rate, profit, median hold</li><li><b>Red flags</b> for quick flips, losing weeks and very busy wallets</li><li><b>Paste a list</b> of wallets and score them all, sorted by score</li></ul></div>
+    <div class="shot tall"><img src="wallet.webp" alt="The Wallet tab showing a score of 41 with its breakdown and a filters vs all trades table" loading="lazy" width="383" height="860"></div>
+  </div>
+
+  <div class="feature flip">
+    <div class="feature-copy"><span class="eyebrow">Recommended filters</span><h3 style="font-size:28px">The range where this wallet actually wins</h3>
+      <p class="lead" style="font-size:17px">It tests every market-cap and buy-size range, keeps the one that makes the most SOL while winning often, and trims weak edges.</p>
+      <ul><li><b>Tap any value</b> to copy it straight into your bot</li><li><b>Buy size and market-cap tables</b> show where the wins and losses come from</li><li><b>Market cap cut-off checker</b>: how it does below $25K, $30K, any value</li></ul></div>
+    <div class="shot tall"><img src="filters.webp" alt="Recommended filters: Min market cap $7K, Max $15K, buy size 1 to 1.5 SOL" loading="lazy" width="383" height="860"></div>
+  </div>
+
+  <div class="feature">
+    <div class="feature-copy"><span class="eyebrow">Top traders</span><h3 style="font-size:28px">Find the wallets behind a winning token</h3>
+      <p class="lead" style="font-size:17px">Paste a token, or several separated by commas, and see who made the most on it. Score them all with one click.</p>
+      <ul><li><b>Min PnL</b> in % or SOL, and a <b>max buys</b> limit</li><li><b>Multi-wallet</b> flags for wallets that trade in the same block</li><li><b>"3 of 4 tokens"</b> tags show repeat winners across tokens</li></ul></div>
+    <div class="shot tall"><img src="toptraders.webp" alt="Top traders list with scores 92, 78, 64 and 88" loading="lazy" width="383" height="860"></div>
+  </div>
+
+  <div class="feature flip">
+    <div class="feature-copy"><span class="eyebrow">Holders</span><h3 style="font-size:28px">Check who holds a token before you buy</h3>
+      <p class="lead" style="font-size:17px">A token's top holders, each labelled, with a short list of what to watch out for.</p>
+      <ul><li><b>Dev, bundlers, snipers, insiders</b> and fresh wallets</li><li><b>Same-funder groups</b>, phishing and fake airdrop wallets</li><li><b>Mint and freeze authority</b> at a glance</li></ul></div>
+    <div class="shot tall"><img src="holders.webp" alt="Holders check with dev 5%, bundlers 6% and a freeze authority warning" loading="lazy" width="383" height="860"></div>
+  </div>
+
+  <div class="feature">
+    <div class="feature-copy"><span class="eyebrow">On GMGN</span><h3 style="font-size:28px">Your results, right on wallet pages</h3>
+      <p class="lead" style="font-size:17px">Open a wallet you analyzed on gmgn.ai and the score sits next to its address, with labels on every token.</p>
+      <ul><li><b>DEV, Spike, Round-trip, QuickSell</b> labels per token</li><li><b>In filter / Out of filter</b>: what your bot would have taken</li><li>Read-only, and you can turn it off in settings</li></ul></div>
+    <div class="shot wide"><img src="gmgn.webp" alt="A wallet page with the score badge 86 Excellent to copy and token labels" loading="lazy" width="1100" height="680"></div>
+  </div>
+</div></section>
+
+<section class="band"><div class="wrap">
+  <div class="sec-head"><span class="eyebrow">Why it helps</span><h2>Built around what a copier actually gets</h2><p class="lead">A wallet's own profit is not your profit. The score is built from the trades a copy bot could realistically follow.</p></div>
+  <div class="grid3">
+    <div class="benefit"><span class="chip in tag">Fewer bad copies</span><h3>Skip wallets that only look good</h3><p>Perfect records on 3 trades, tiny 2% wins and one lucky hit don't score high. Wins only count at +20% or more.</p></div>
+    <div class="benefit"><span class="chip qs tag">Copier losses</span><h3>See the trades you can't follow</h3><p>Sells within seconds at low market caps are counted as losses, because a bot buying a block later can't get those fills.</p></div>
+    <div class="benefit"><span class="chip spike tag">Entry spikes</span><h3>Know what you'll really pay</h3><p>Optional checks measure how far price jumps right after the wallet buys, and which trades were up big before closing red.</p></div>
+    <div class="benefit"><span class="chip in tag">Ready filters</span><h3>Filters, not just a score</h3><p>Every wallet comes with the market-cap and buy-size range to set in your bot, and how much better it does inside it.</p></div>
+    <div class="benefit"><span class="chip rt tag">Up to date</span><h3>Judged on what it does now</h3><p>Only the last 31 days count, so a wallet back from a long break is judged on its new trades, not last year's.</p></div>
+    <div class="benefit"><span class="chip dev tag">Private</span><h3>Your data stays yours</h3><p>No sign-up and no server. Your key, wallets and results stay in your browser; lookups go straight to the data services.</p></div>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <div class="sec-head"><span class="eyebrow">Common questions</span><h2>Before you install</h2></div>
+  <div class="faq">
+    <details><summary>Is it free?</summary><div class="ans"><p>Yes. The extension is free. It uses your own Helius API key, and Helius's free plan is enough for regular use.</p></div></details>
+    <details><summary>Can it trade or touch my wallet?</summary><div class="ans"><p>No. It only reads public blockchain data. It never connects to a wallet, never signs anything and cannot move funds.</p></div></details>
+    <details><summary>Is the score financial advice?</summary><div class="ans"><p>No. It's an estimate from a wallet's past trades. Past results don't guarantee future ones, so use it as one input to your own decisions.</p></div></details>
+  </div>
+  <p style="margin-top:24px"><a href="faq.html">All questions →</a></p>
+</div></section>
+
+<section class="band cta"><div class="wrap">
+  <div class="cta-box"><h2>Score your first wallet today</h2><p class="lead">Install the extension, add a free Helius key and paste a wallet. It takes about a minute.</p></div>
+  <div class="hero-cta"><a class="btn btn-primary" href="getting-started.html#install">Add to Chrome</a><a class="btn btn-ghost" href="getting-started.html">Setup guide</a></div>
+</div></section>
+
+</main>
+<footer class="site-foot"><div class="wrap">
+  <div><a class="brand" href="index.html"><img src="icon.png" alt="" width="30" height="30">Copytrade Wallet Score</a>
+    <p style="margin-top:12px;max-width:34ch">A Chrome extension that scores Solana wallets for copy trading and finds the filters that work.</p></div>
+  <div><h4>Product</h4><ul><li><a href="features.html">Features</a></li><li><a href="features.html#scoring">How scoring works</a></li><li><a href="getting-started.html">Getting started</a></li></ul></div>
+  <div><h4>Help</h4><ul><li><a href="faq.html">FAQ</a></li><li><a href="getting-started.html#credits">Helius credits</a></li><li><a href="getting-started.html#install">Install</a></li></ul></div>
+  <div><h4>Legal</h4><ul><li><a href="privacy.html">Privacy policy</a></li><li><a href="terms.html">Terms of use</a></li></ul></div>
+  <div class="fine"><span>© 2026 Copytrade Wallet Score. Not financial advice.</span><span>Not affiliated with GMGN, Helius, GeckoTerminal or Binance.US.</span></div>
+</div></footer>
+<script>
+(function(){var b=document.getElementById('menuBtn'),n=document.getElementById('siteNav');if(!b||!n)return;
+b.addEventListener('click',function(){var o=n.classList.toggle('open');b.setAttribute('aria-expanded',o?'true':'false')});})();
+</script>
+</body>
+</html>

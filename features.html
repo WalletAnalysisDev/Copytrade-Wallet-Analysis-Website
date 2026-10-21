@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Features · Copytrade Wallet Score</title>
+<meta name="description" content="Everything Copytrade Wallet Score does: wallet scores, filters, top traders, holders checks, GMGN labels and how scoring works.">
+<meta property="og:title" content="Features · Copytrade Wallet Score">
+<meta property="og:description" content="Everything Copytrade Wallet Score does: wallet scores, filters, top traders, holders checks, GMGN labels and how scoring works.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#0b0e0d">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<header class="site-head"><div class="wrap">
+  <a class="brand" href="index.html"><img src="icon.png" alt="" width="30" height="30">Copytrade Wallet Score</a>
+  <button class="menu-btn" id="menuBtn" type="button" aria-expanded="false" aria-controls="siteNav">Menu</button>
+  <nav class="nav" id="siteNav" aria-label="Main"><a href="features.html" aria-current="page">Features</a><a href="getting-started.html">Getting started</a><a href="faq.html">FAQ</a><a href="privacy.html">Privacy</a><a class="btn btn-primary" href="getting-started.html#install">Add to Chrome</a></nav>
+</div></header>
+<main id="main">
+
+<div class="page-head"><div class="wrap"><span class="eyebrow">Features</span><h1 style="font-size:clamp(36px,5vw,56px)">Everything the extension does</h1><p class="lead">The side panel has four tabs: Wallet, Top traders, Automatic and History. Settings sit behind the menu in the top-right corner.</p></div></div>
+<div class="wrap doc">
+  <nav class="toc" aria-label="On this page"><a href="#wallet">Wallet tab</a><a href="#lists">Wallet lists</a><a href="#filters">Filters</a><a href="#checks">Spikes &amp; round-trips</a><a href="#toptraders">Top traders</a><a href="#holders">Holders</a><a href="#automatic">Automatic</a><a href="#history">History</a><a href="#gmgn">GMGN labels</a><a href="#scoring">How scoring works</a><a href="#settings">Settings &amp; storage</a></nav>
+  <article class="prose">
+    <h2 id="wallet">Wallet tab</h2>
+    <p>Paste a Solana wallet and press Score. The extension pulls the wallet's trades from the last 31 days, analyzes up to its newest 50 tokens (you can change the number) and shows:</p>
+    <ul><li>The 0–100 score, its grade (Excellent, Good, Coin flip, Avoid copying) and every line that went into it.</li><li><b>With filters vs all trades</b>: trades, win rate, profit, return, average win and loss, +100% wins, median hold and the last 7 days, side by side.</li><li>The token list, with labels for DEV, spikes, round-trips, QuickSell Low MC and repeat buys.</li><li>A period switch (7, 14, 30 days or all 31) to see how the wallet does over shorter windows.</li></ul>
+    <p>Saved wallets reopen for free from History. Opening one that's more than 30 minutes old fetches only the trades made since.</p>
+    <div class="shot"><img src="wallet.webp" alt="Wallet tab" loading="lazy" width="383" height="860" style="max-width:380px"></div>
+
+    <h2 id="lists">Wallet lists</h2>
+    <p>Paste many wallets at once, one per line or separated by commas, and press Score. Each one is analyzed in turn; the list shows its score as it finishes, then sorts by score. Click an address to open it on GMGN, or the rest of the row to reopen its analysis. While one wallet is analyzed, the next is pulled in the background.</p>
+
+    <h2 id="filters">Recommended filters</h2>
+    <p>The extension tries every market-cap and buy-size range the wallet traded in and keeps the one that makes the most SOL while winning often, then cuts weak edges and blocks QuickSell trades with a higher minimum market cap. Tap a value to copy it. The buy size and market cap tables show where wins and losses come from, and the cut-off checker shows how the wallet does below any market cap you type.</p>
+
+    <h2 id="checks">Spikes &amp; round-trips</h2>
+    <p>An optional check, about 20 Helius credits per token, that looks at the price right around each trade:</p>
+    <ul><li><b>Entry spike</b>: how far the price jumped within a block of the wallet's buy. A copier buying a block later pays that much more.</li><li><b>Round-trip</b>: a trade that went up 50% or more and still closed red. A take-profit would have caught it.</li></ul>
+    <p>Run it on all analyzed tokens or only those inside the filters (they're the ones that count in the score). It can run automatically on every wallet you analyze.</p>
+
+    <h2 id="toptraders">Top traders</h2>
+    <p>Paste a token address or GMGN link, or several separated by commas, and press Find. The extension reads up to 50,000 of the token's trades and ranks every trader by realized profit.</p>
+    <ul><li>Show the top 25, 50, 75 or 100, filtered by Min PnL (in % or SOL) and Max buys.</li><li>Score all of them, or have new searches scored automatically. Round-trip checks can run only on wallets above a score you choose.</li><li>Multi-wallet flags mark wallets trading in the same block as others. In a multi-token search, "3 of 4 tokens" shows repeat winners.</li><li>Auto-check: when you open a token on GMGN, it's searched right away.</li></ul>
+
+    <h2 id="holders">Holders</h2>
+    <p>Switch Top traders to Holders and check a token's top 25, 50 or 100 holders. Each is labelled: Dev, Bundler, Sniper, Insider, Fresh wallet, Same funder, Phishing, Multi-wallet or Suspicious. A summary shows how much the top 10, the dev, bundlers and snipers hold, plus mint and freeze authority, with a short "watch out" list.</p>
+
+    <h2 id="automatic">Automatic</h2>
+    <p>Finds recently migrated tokens that pass your filters (market cap, 24h volume, age, fees, holders and dev share), reads each token's top traders and scores the best of them. It runs one token at a time, can repeat on a timer while the panel is open, and keeps a log with the credits used. You can also import your own token list to scan.</p>
+
+    <h2 id="history">History</h2>
+    <p>Every wallet and Holders check you've run, with views for All, Top traders and Holders. Search, sort by newest or score, copy all 90+ wallets, and reopen anything for free.</p>
+
+    <h2 id="gmgn">Labels on GMGN</h2>
+    <p>On a gmgn.ai wallet page, a badge next to the address shows the score, grade and how old it is (faded after a day). Each analyzed token gets labels: DEV, Spike, RT, QuickSell Low MC, and In filter or Out of filter. Clicking the badge re-analyzes the wallet. Nothing is added inside GMGN's token side panel, nothing on the page is clicked or changed, and you can turn it off in settings.</p>
+    <div class="shot wide"><img src="gmgn.webp" alt="GMGN wallet page with labels" loading="lazy" width="1100" height="680"></div>
+
+    <h2 id="scoring">How scoring works</h2>
+    <p>The score starts at the wallet's win rate inside its recommended filters. A win means the trade made +20% or more. Then these rules add or take away points. These are the defaults; every number can be changed in Settings → Scoring.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Rule</th><th>When</th><th>Points</th></tr></thead>
+      <tbody>
+        <tr><td>High win rate</td><td>Over 50% win inside the filters, 5+ trades</td><td class="pts pos">+15</td></tr>
+        <tr><td>Filters make the difference</td><td>3× the no-filter profit, 2+ SOL, 10+ trades <small>(5× and win rate 10 pts higher: +20)</small></td><td class="pts pos">+10 / +20</td></tr>
+        <tr><td>Green days</td><td>Profitable days in the last 7, by profit per day</td><td class="pts pos">+5 to +20</td></tr>
+        <tr><td>Round-trips</td><td>Trades up 100% that closed red (needs the check)</td><td class="pts pos">+3 to +8</td></tr>
+        <tr><td>Low win rate</td><td>Under 35% <small>(35–40%: −20)</small></td><td class="pts neg">−50</td></tr>
+        <tr><td>Overall win rate</td><td>Under 25% over all trades <small>(under 40%: −10)</small></td><td class="pts neg">−20</td></tr>
+        <tr><td>Recent form</td><td>Last 7 days under 30% win <small>(under 45%: −10)</small></td><td class="pts neg">−30</td></tr>
+        <tr><td>Very busy</td><td>1,000+ trades in 7 days <small>(over 500: −15)</small></td><td class="pts neg">−40</td></tr>
+        <tr><td>Quick flipper</td><td>Half its tokens sold within 20 seconds</td><td class="pts neg">−40</td></tr>
+        <tr><td>Fast flips</td><td>10–50%+ of tokens held under 10 seconds</td><td class="pts neg">−5 to −20</td></tr>
+        <tr><td>Entry spikes</td><td>Most buys followed by a 50%+ jump (needs the check)</td><td class="pts neg">−10 to −20</td></tr>
+        <tr><td>Red week</td><td>Every trading day in the last 7 lost money</td><td class="pts neg">−50</td></tr>
+        <tr><td>Too few tokens</td><td>Only 1 token <small>(2 tokens: −15)</small></td><td class="pts neg">−25</td></tr>
+        <tr><td>Short holds</td><td>Half its tokens sold within 40 seconds</td><td class="pts">cap 60</td></tr>
+        <tr><td>QuickSell Low MC</td><td>Sold within 15 s after buying under $5K</td><td class="pts">counts −20%</td></tr>
+        <tr><td>Perfect record</td><td>9+ trades, all profitable, no red flags</td><td class="pts pos">100</td></tr>
+      </tbody>
+    </table></div>
+    <p>Every other wallet is capped at 99. Tokens the wallet created (DEV) can be left out of the score in settings.</p>
+
+    <h2 id="settings">Settings &amp; storage</h2>
+    <ul><li><b>Helius API keys</b>: add several; when one runs out of credits, the next is used. Each shows its usage.</li><li><b>Analysis</b>: tokens to analyze, minimum trades per filter, fill gap, never-sold tokens, DEV tokens, platforms, GMGN labels.</li><li><b>Storage</b>: a meter of what's saved, with a Clear button per kind of data and automatic clean-up when storage is almost full.</li><li><b>Scoring</b>: Automatic (the defaults above) or Custom, where every rule and number is yours.</li></ul>
+  </article>
+</div>
+
+</main>
+<footer class="site-foot"><div class="wrap">
+  <div><a class="brand" href="index.html"><img src="icon.png" alt="" width="30" height="30">Copytrade Wallet Score</a>
+    <p style="margin-top:12px;max-width:34ch">A Chrome extension that scores Solana wallets for copy trading and finds the filters that work.</p></div>
+  <div><h4>Product</h4><ul><li><a href="features.html">Features</a></li><li><a href="features.html#scoring">How scoring works</a></li><li><a href="getting-started.html">Getting started</a></li></ul></div>
+  <div><h4>Help</h4><ul><li><a href="faq.html">FAQ</a></li><li><a href="getting-started.html#credits">Helius credits</a></li><li><a href="getting-started.html#install">Install</a></li></ul></div>
+  <div><h4>Legal</h4><ul><li><a href="privacy.html">Privacy policy</a></li><li><a href="terms.html">Terms of use</a></li></ul></div>
+  <div class="fine"><span>© 2026 Copytrade Wallet Score. Not financial advice.</span><span>Not affiliated with GMGN, Helius, GeckoTerminal or Binance.US.</span></div>
+</div></footer>
+<script>
+(function(){var b=document.getElementById('menuBtn'),n=document.getElementById('siteNav');if(!b||!n)return;
+b.addEventListener('click',function(){var o=n.classList.toggle('open');b.setAttribute('aria-expanded',o?'true':'false')});})();
+</script>
+</body>
+</html>

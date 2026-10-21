@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Getting started · Copytrade Wallet Score</title>
+<meta name="description" content="Install the extension, add a free Helius API key and score your first Solana wallet.">
+<meta property="og:title" content="Getting started · Copytrade Wallet Score">
+<meta property="og:description" content="Install the extension, add a free Helius API key and score your first Solana wallet.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#0b0e0d">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<header class="site-head"><div class="wrap">
+  <a class="brand" href="index.html"><img src="icon.png" alt="" width="30" height="30">Copytrade Wallet Score</a>
+  <button class="menu-btn" id="menuBtn" type="button" aria-expanded="false" aria-controls="siteNav">Menu</button>
+  <nav class="nav" id="siteNav" aria-label="Main"><a href="features.html">Features</a><a href="getting-started.html" aria-current="page">Getting started</a><a href="faq.html">FAQ</a><a href="privacy.html">Privacy</a><a class="btn btn-primary" href="getting-started.html#install">Add to Chrome</a></nav>
+</div></header>
+<main id="main">
+
+<div class="page-head"><div class="wrap"><span class="eyebrow">Getting started</span><h1 style="font-size:clamp(36px,5vw,56px)">Set up in about a minute</h1><p class="lead">Install the extension, add a free Helius key, and score your first wallet.</p></div></div>
+<div class="wrap doc">
+  <nav class="toc" aria-label="On this page"><a href="#install">Install</a><a href="#key">Get a Helius key</a><a href="#first">Score a wallet</a><a href="#bot">Use the filters</a><a href="#credits">Helius credits</a><a href="#tips">Tips</a></nav>
+  <article class="prose">
+    <h2 id="install">1. Install the extension</h2>
+    <div class="callout"><p><b>Coming soon to the Chrome Web Store.</b> The extension is in Google's review. This page will link to the listing as soon as it's approved.</p></div>
+    <p>Then pin it: click the puzzle icon in Chrome's toolbar and the pin next to Copytrade Wallet Score. Clicking its icon opens the side panel.</p>
+
+    <h2 id="key">2. Get a free Helius API key</h2>
+    <ol><li>Go to <a href="https://www.helius.dev" target="_blank" rel="noopener">helius.dev</a> and sign up. The free plan works.</li><li>In the Helius dashboard, open API Keys and copy your key.</li><li>In the extension, open the menu (three lines, top right) and paste it under Helius API keys.</li></ol>
+    <p>You can add more than one key. When one runs out of monthly credits, the next is used automatically.</p>
+
+    <h2 id="first">3. Score your first wallet</h2>
+    <ol><li>Copy a wallet address, for example from a token's top traders on GMGN.</li><li>Paste it into the Wallet tab and press Score.</li><li>Read the score, its breakdown, and the filters vs all trades table.</li></ol>
+    <p>To score many at once, paste a list with one wallet per line. To find wallets, use Top traders with a token you know did well.</p>
+
+    <h2 id="bot">4. Put the filters in your copy bot</h2>
+    <p>Tap Min market cap, Max market cap, Min SOL buy and Max SOL buy to copy each value, and paste them into your copy bot's settings for that wallet. On GMGN wallet pages, In filter and Out of filter labels show which trades those filters would have taken.</p>
+
+    <h2 id="credits">Helius credits</h2>
+    <p>Everything the extension reads from Helius uses credits from your plan. These are approximate costs:</p>
+    <div class="tbl"><table><thead><tr><th>Action</th><th>About</th></tr></thead><tbody>
+      <tr><td>Score a new wallet</td><td class="num">100+ credits</td></tr>
+      <tr><td>Reopen a saved wallet</td><td class="num">free, or a few credits for new trades</td></tr>
+      <tr><td>Spike &amp; round-trip check</td><td class="num">~20 credits per token</td></tr>
+      <tr><td>Top traders search</td><td class="num">~1,000 credits per 10,000 trades read</td></tr>
+      <tr><td>Holders check</td><td class="num">~10 credits per holder with wallet details</td></tr>
+    </tbody></table></div>
+    <p>The extension shows the credits each scan used, and how many each key has used this month.</p>
+
+    <h2 id="tips">Tips</h2>
+    <ul><li>Turn off <b>Auto-check spikes &amp; round-trips</b> for fast, cheap scans, then run the check on wallets that score well.</li><li>Use <b>Only if score ≥</b> in Top traders so checks only run on promising wallets.</li><li>Lower <b>Analyze tokens</b> to 25 for faster scans of very active wallets.</li><li>A score with few trades behind it ("small sample") deserves less trust than the number suggests.</li></ul>
+  </article>
+</div>
+
+</main>
+<footer class="site-foot"><div class="wrap">
+  <div><a class="brand" href="index.html"><img src="icon.png" alt="" width="30" height="30">Copytrade Wallet Score</a>
+    <p style="margin-top:12px;max-width:34ch">A Chrome extension that scores Solana wallets for copy trading and finds the filters that work.</p></div>
+  <div><h4>Product</h4><ul><li><a href="features.html">Features</a></li><li><a href="features.html#scoring">How scoring works</a></li><li><a href="getting-started.html">Getting started</a></li></ul></div>
+  <div><h4>Help</h4><ul><li><a href="faq.html">FAQ</a></li><li><a href="getting-started.html#credits">Helius credits</a></li><li><a href="getting-started.html#install">Install</a></li></ul></div>
+  <div><h4>Legal</h4><ul><li><a href="privacy.html">Privacy policy</a></li><li><a href="terms.html">Terms of use</a></li></ul></div>
+  <div class="fine"><span>© 2026 Copytrade Wallet Score. Not financial advice.</span><span>Not affiliated with GMGN, Helius, GeckoTerminal or Binance.US.</span></div>
+</div></footer>
+<script>
+(function(){var b=document.getElementById('menuBtn'),n=document.getElementById('siteNav');if(!b||!n)return;
+b.addEventListener('click',function(){var o=n.classList.toggle('open');b.setAttribute('aria-expanded',o?'true':'false')});})();
+</script>
+</body>
+</html>
