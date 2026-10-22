@@ -24,8 +24,9 @@
 <main id="main">
 
 <div class="page-head"><div class="wrap"><span class="eyebrow">Features</span><h1 style="font-size:clamp(36px,5vw,56px)">Everything the extension does</h1><p class="lead">The side panel has four tabs: Wallet, Top traders, Automatic and History. Settings sit behind the menu in the top-right corner.</p></div></div>
+<section style="padding-top:8px;padding-bottom:24px"><div class="wrap"><div class="vid"><video controls muted playsinline preload="none" poster="promo.jpg" aria-label="45-second tour of the main features"><source src="promo.mp4" type="video/mp4"></video></div><p class="vid-cap">A 45-second tour of the main features. Example data. No sound.</p></div></section>
 <div class="wrap doc">
-  <nav class="toc" aria-label="On this page"><a href="#wallet">Wallet tab</a><a href="#lists">Wallet lists</a><a href="#filters">Filters</a><a href="#checks">Spikes &amp; round-trips</a><a href="#toptraders">Top traders</a><a href="#holders">Holders</a><a href="#automatic">Automatic</a><a href="#history">History</a><a href="#gmgn">GMGN labels</a><a href="#scoring">How scoring works</a><a href="#settings">Settings &amp; storage</a></nav>
+  <nav class="toc" aria-label="On this page"><a href="#wallet">Wallet tab</a><a href="#lists">Wallet lists</a><a href="#filters">Filters</a><a href="#bigwinners">Big winners</a><a href="#age">Token age</a><a href="#platforms">Platforms</a><a href="#checks">Spikes &amp; round-trips</a><a href="#toptraders">Top traders</a><a href="#holders">Holders</a><a href="#automatic">Automatic</a><a href="#history">History</a><a href="#gmgn">GMGN labels</a><a href="#scoring">How scoring works</a><a href="#settings">Settings &amp; storage</a></nav>
   <article class="prose">
     <h2 id="wallet">Wallet tab</h2>
     <p>Paste a Solana wallet and press Score. The extension pulls the wallet's trades from the last 31 days, analyzes up to its newest 50 tokens (you can change the number) and shows:</p>
@@ -39,10 +40,19 @@
     <h2 id="filters">Recommended filters</h2>
     <p>The extension tries every market-cap and buy-size range the wallet traded in and keeps the one that makes the most SOL while winning often, then cuts weak edges and blocks QuickSell trades with a higher minimum market cap. Tap a value to copy it. The buy size and market cap tables show where wins and losses come from, and the cut-off checker shows how the wallet does below any market cap you type.</p>
 
+    <h2 id="bigwinners">Big winners left out</h2>
+    <p>When 2 or more trades of +100% fall outside the recommended filters, a note under <b>With filters vs all trades</b> names them and shows the wider filter that would catch them. Tap <b>Show stats with the wider filter</b> to add a <b>Wider</b> column to the table: trades, win rate, profit, return, wins and losses with that filter. It also tells you whether the wider range holds up without those trades or depends on a few lucky wins. It's a preview: the score and filters stay the same.</p>
+
+    <h2 id="age">Token age</h2>
+    <p>The extension knows how old each token was when the wallet bought it. A <b>Token age at buy</b> table (under 1h up to 90+ days) sits next to Buy size and Entry market cap, and each token shows its age. When it clearly does better, the recommended filters add a <b>Min / Max token age</b>, cut at whole days around the wallet's own trades (for example 31 days when it wins on month-old tokens and loses on old ones). Turn it off in Settings → Analysis.</p>
+
+    <h2 id="platforms">Platforms</h2>
+    <p>See where the wallet bought: Pump.fun, PumpSwap, Meteora, Bonk.fun, Raydium and more, each with trades, win rate and net SOL. Tap a platform to leave it out, and the extension suggests which one to turn off when it's dragging the results down.</p>
+
     <h2 id="checks">Spikes &amp; round-trips</h2>
     <p>An optional check, about 20 Helius credits per token, that looks at the price right around each trade:</p>
     <ul><li><b>Entry spike</b>: how far the price jumped within a block of the wallet's buy. A copier buying a block later pays that much more.</li><li><b>Round-trip</b>: a trade that went up 50% or more and still closed red. A take-profit would have caught it.</li></ul>
-    <p>Run it on all analyzed tokens or only those inside the filters (they're the ones that count in the score). It can run automatically on every wallet you analyze.</p>
+    <p>Run it on all analyzed tokens or only those inside the filters (they're the ones that count in the score). It can run automatically on every wallet you analyze, and a progress bar shows how far along it is.</p>
 
     <h2 id="toptraders">Top traders</h2>
     <p>Paste a token address or GMGN link, or several separated by commas, and press Find. The extension reads up to 50,000 of the token's trades and ranks every trader by realized profit.</p>
@@ -62,12 +72,13 @@
     <div class="shot wide"><img src="gmgn.webp" alt="GMGN wallet page with labels" loading="lazy" width="1100" height="680"></div>
 
     <h2 id="scoring">How scoring works</h2>
-    <p>The score starts at the wallet's win rate inside its recommended filters. A win means the trade made +20% or more. Then these rules add or take away points. These are the defaults; every number can be changed in Settings → Scoring.</p>
+    <p>The score starts at the wallet's win rate inside its recommended filters. A win means the trade made +10% or more. Then these rules add or take away points. These are the defaults; every number can be changed in Settings → Scoring.</p>
     <div class="tbl"><table>
       <thead><tr><th>Rule</th><th>When</th><th>Points</th></tr></thead>
       <tbody>
         <tr><td>High win rate</td><td>Over 50% win inside the filters, 5+ trades</td><td class="pts pos">+15</td></tr>
         <tr><td>Filters make the difference</td><td>3× the no-filter profit, 2+ SOL, 10+ trades <small>(5× and win rate 10 pts higher: +20)</small></td><td class="pts pos">+10 / +20</td></tr>
+        <tr><td>Filters make it profitable</td><td>Losing overall but profitable inside the filters: the red-days penalty drops to −5 and the overall win rate penalty is halved</td><td class="pts pos">softer</td></tr>
         <tr><td>Green days</td><td>Profitable days in the last 7, by profit per day</td><td class="pts pos">+5 to +20</td></tr>
         <tr><td>Round-trips</td><td>Trades up 100% that closed red (needs the check)</td><td class="pts pos">+3 to +8</td></tr>
         <tr><td>Low win rate</td><td>Under 35% <small>(35–40%: −20)</small></td><td class="pts neg">−50</td></tr>

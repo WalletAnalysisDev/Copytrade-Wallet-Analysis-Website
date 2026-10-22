@@ -460,3 +460,30 @@ header{position:relative;z-index:56}
 .wbr:not(.ok){cursor:default}.wbr .wa{color:inherit;text-decoration:none}.wbr .wa:hover{color:var(--win);text-decoration:underline}.wbr .rk{color:var(--muted);font-size:10.5px}.wbr .wa{font-family:ui-monospace,Consolas,monospace}.wbr .st{color:var(--muted);font-size:11px}.wbr.run{border-color:color-mix(in srgb,var(--win) 50%,transparent)}
 .wbr .sc{font:700 12px ui-monospace,Consolas,monospace;padding:1px 6px;border-radius:5px}
 .wscope{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;margin-left:22px}.wscope select{font-size:11.5px;padding:2px 4px}
+
+/* QuickSell inside the filters: red frame, it counts as a loss for a copier */
+.tk.qsin{outline:1.5px solid var(--loss);outline-offset:-1.5px;border-radius:8px;padding-left:8px;padding-right:8px;margin-left:-8px;margin-right:-8px;background:var(--loss-soft)}
+.tk.qsin+.tk{border-top-color:transparent}
+
+/* spike & round-trip check progress */
+.chkprog{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+.chkbar{height:8px;border-radius:99px;background:var(--raise);border:1px solid var(--line2);overflow:hidden}
+.chkbar i{display:block;height:100%;background:var(--win);border-radius:99px;transition:width .4s ease}
+.chkbar.wait i{width:30%!important;animation:chkslide 1.2s ease-in-out infinite}
+@keyframes chkslide{0%{transform:translateX(-100%)}100%{transform:translateX(340%)}}
+.chkline{font-size:12px;color:var(--muted)}.chkline b{color:var(--ink)}
+@media (prefers-reduced-motion:reduce){.chkbar.wait i{animation:none}}
+
+/* big winners the filters leave out */
+.bignote{border-left:3px solid var(--blue,#6aa6ff);padding-left:10px}
+.tag.big{background:rgba(106,166,255,.15);color:#6aa6ff}
+
+/* token age filter */
+.agenote{border-left:3px solid #f0b90b;padding-left:10px}
+.tag.age{background:rgba(240,185,11,.15);color:#f0b90b}
+
+/* wider-filter preview column */
+.cmpw .cmph,.cmpw .cmpr{grid-template-columns:1.05fr 1fr 1fr 1fr}
+.cmph .wdh{color:#6aa6ff}.cmpr b.wd:not(.up):not(.down){color:#6aa6ff}
+.bignote .linkbtn{color:#6aa6ff;font-weight:600;text-decoration:underline;padding:0;background:none;border:0;cursor:pointer;font:inherit}
+.bignote .run{display:block;margin-top:8px}

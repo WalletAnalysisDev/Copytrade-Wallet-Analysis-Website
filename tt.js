@@ -51,7 +51,10 @@ function scoreOf(raw,px,wallet,buys7,est,ref,trades7){
   const base=summarize(U,o),{best:b0}=optimize(U,o),{best}=trimWeakEdges(b0,U,o),k=best?summarize(U.filter(t=>inF(t,best)),o):base;
   const inside=best?U.filter(t=>inF(t,best)):U,rs=rsOf(inside,o);
   const win=Math.round(k.win*100),hold=avgHoldOf(U),p7=pnl7Of(recent(tr,{...o,offPlat:[]}),ref,px||150),adj=adjustScore(win,buys7,est,hold,p7,k.n>=SC().perfectN&&k.win===1?k.n:0,k.n,fastShareOf(U),rs,trades7,formOf(U,inside,o,ref));
-  return {rv:rulesV(),trades7,score:adj.score,win,parts:adj.parts,perfect:adj.perfect||0,reliable:!!best,n:k.n,all:U.length,pnl:k.pnl,hold,buys7,rs:rs?{rt:rs.rt,heavy:rs.heavy,spN:rs.spN,checked:rs.checked,pot:rs.pot}:null,allPnl:base.pnl,allWin:base.win,p7usd:p7?p7.totUsd:null,p7days:p7?p7.days:0,p7pos:p7?p7.pos:0};
+  const out={rv:rulesV(),trades7,score:adj.score,win,parts:adj.parts,perfect:adj.perfect||0,reliable:!!best,n:k.n,all:U.length,pnl:k.pnl,hold,buys7,rs:rs?{rt:rs.rt,heavy:rs.heavy,spN:rs.spN,checked:rs.checked,pot:rs.pot}:null,allPnl:base.pnl,allWin:base.win,p7usd:p7?p7.totUsd:null,p7days:p7?p7.days:0,p7pos:p7?p7.pos:0};
+  // GMGN labels for this wallet's tokens: kept off the saved score (not stored), handed to gmPublishLite
+  try{const G=gmTokensOf(tr,o,best);Object.defineProperty(out,'_gm',{value:{tokens:G.tokens,devN:G.devN,filters:gmFilters(best)},enumerable:false})}catch(e){}
+  return out;
 }
 /* Optional round-trip & entry-spike check while scoring (Top traders and Automatic): checks up to `max` of the newest
    tokens inside the wallet's filters, about 20 Helius credits each. Results are shared with the Wallet tab. */

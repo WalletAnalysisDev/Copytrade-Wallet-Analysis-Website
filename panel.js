@@ -28,16 +28,16 @@ $('upd').addEventListener('click',async()=>{
   chrome.runtime.reload()});
 updCheck();setInterval(updCheck,60000);
 window.addEventListener('focus',updCheck);document.addEventListener('visibilitychange',()=>{if(!document.hidden)updCheck()});
-const RULES_V=23; // scoring-code version: bump whenever adjustScore or the filter search changes, so saved scores get recomputed
+const RULES_V=28; // scoring-code version: bump whenever adjustScore or the filter search changes, so saved scores get recomputed
 const rulesV=()=>RULES_V+':'+scVer(); // also changes when you edit Custom scoring
-const DEF={gmgn:true,chkall:true,lsauto:true,autotab:false,period:0,rsmin:0,lastn:50,minn:10,slip:0,openloss:true,autocheck:false,nodev:false,maxr:0,offplat:[],adj:true};
+const DEF={agef:true,gmgn:true,chkall:true,lsauto:true,autotab:false,period:0,rsmin:0,lastn:50,minn:10,slip:0,openloss:true,autocheck:false,nodev:false,maxr:0,offplat:[],adj:true};
 let SET={...DEF};try{SET={...DEF,...JSON.parse(store.get('ws-set')||'{}')}}catch(e){}
 const saveSet=()=>store.set('ws-set',JSON.stringify(SET));
 function cleanKey(v){v=(v||'').trim();const m=v.match(/api-key=([0-9a-fA-F-]{20,})/);return m?m[1]:v}
 const getKey=()=>hkActive(); // the first key that still has credits (see engine.js)
-function opts(){return {opp:true,lastN:Math.max(5,Math.floor(SET.lastn)||50),days:0,slip:Math.max(0,+SET.slip||0)/100,minN:Math.max(3,Math.floor(SET.minn)||10),openLoss:!!SET.openloss,noDev:!!SET.nodev,maxRounds:+SET.maxr||0,offPlat:Array.isArray(SET.offplat)?SET.offplat:[],hide:true,winWeight:2,supply:1e9,qsLow:true}}
+function opts(){return {opp:true,lastN:Math.max(5,Math.floor(SET.lastn)||50),days:0,slip:Math.max(0,+SET.slip||0)/100,minN:Math.max(3,Math.floor(SET.minn)||10),openLoss:!!SET.openloss,noDev:!!SET.nodev,maxRounds:+SET.maxr||0,offPlat:Array.isArray(SET.offplat)?SET.offplat:[],hide:true,winWeight:2,supply:1e9,qsLow:true,ageF:SET.agef!==false}}
 
-$('lastn').value=SET.lastn;$('minn').value=SET.minn;$('slip').value=SET.slip;$('openloss').checked=SET.openloss;$('autocheck').checked=SET.autocheck;$('nodev').checked=SET.nodev;$('maxr').value=String(SET.maxr||0);
+$('lastn').value=SET.lastn;$('minn').value=SET.minn;$('slip').value=SET.slip;$('openloss').checked=SET.openloss;$('autocheck').checked=SET.autocheck;$('nodev').checked=SET.nodev;$('agef').checked=SET.agef!==false;$('maxr').value=String(SET.maxr||0);
 /* ---------- Helius keys: one row per key with its estimated credits this cycle ---------- */
 const fmtK=n=>n>=1e6?(+(n/1e6).toFixed(2))+'M':n>=1e3?(+(n/1e3).toFixed(n>=1e5?0:1))+'K':String(Math.round(n));
 const ordD=d=>d+(d>=11&&d<=13?'th':['th','st','nd','rd'][d%10]||'th');
@@ -66,7 +66,7 @@ hkSave(hkLoad());setTimeout(hkRender,0);setInterval(hkRender,5000); // after the
 $('maxr').addEventListener('change',()=>{SET.maxr=+$('maxr').value;saveSet();rerender()});
 for(const id of ['lastn','minn','slip'])$(id).addEventListener('change',()=>{SET[id]=+$(id).value;saveSet();if(id!=='lastn')rerender();else status('Analyze tokens: applies the next time you press Score.')});
 delete SET.adj; // replaced by Settings → Scoring
-for(const id of ['openloss','autocheck','nodev'])$(id).addEventListener('change',()=>{SET[id]=$(id).checked;saveSet();rerender()});
+for(const id of ['openloss','autocheck','nodev','agef'])$(id).addEventListener('change',()=>{SET[id]=$(id).checked;saveSet();rerender()});
 // the Wallet tab's "Auto-check spikes & round-trips" is the same setting as Settings → Check round-trips & entry spikes automatically
 $('chkall').checked=SET.chkall!==false;$('wchkscope').value=SET.chkall!==false?'all':'kept';
 $('chkall').addEventListener('change',()=>{SET.chkall=$('chkall').checked;$('wchkscope').value=SET.chkall?'all':'kept';saveSet();rerender()});
@@ -126,7 +126,7 @@ async function score(addr,offline,auto){
     status(offline?'Opened from saved history. No Helius credits used.':`Done. ${w.raw.length} tokens · ${w.newTx} new transactions · about ${w.credits} Helius credits.`+(receiverNote(w)?' '+receiverNote(w):''));
     renderHist();hiMaybe();if(!offline)hubPush().catch(()=>{});
     if(offline&&getKey()&&CUR.A){const ms=[...new Set(CUR.A.trades.map(t=>t.tok))],d=devGet();
-      if(ms.some(m=>!String(d[m]||'').startsWith('2|')))devLookup(ms,getKey()).then(n=>{if(CUR&&CUR.wallet===addr){rerender();hubPush().catch(()=>{})}}).catch(()=>{})} // who created each token: in the background
+      if(ms.some(m=>!String(d[m]||'').startsWith('2|')||!(m in ageGet())))devLookup(ms,getKey()).then(n=>{if(CUR&&CUR.wallet===addr){rerender();hubPush().catch(()=>{})}}).catch(()=>{})} // who created each token: in the background
     if(offline&&getKey()&&w.raw.some(r=>(r[27]||r[21])&&!((r[27]||r[21]) in platGet()))){platLookup(w.raw.map(r=>r[27]||r[21]),getKey()).then(()=>{rerender();hubPush().catch(()=>{})}).catch(()=>{})}
     if(SET.autocheck&&!offline&&(!(+SET.rsmin)||(CUR.A&&CUR.A.score!=null&&CUR.A.score>=+SET.rsmin)))await runCheck();
     // saved data older than 30 minutes: fetch only the trades made since (cheap), so recent tokens show up
@@ -203,7 +203,10 @@ function adjustScore(base,buys7,est,hold,p7,perfect,n,fast,rs,trades7,form){ // 
   const done=()=>{const raw=parts.reduce((a,p)=>a+p[0],base),s1=Math.min(cap,raw);
     if(raw>cap)parts.push([cap-raw,shortHold?`capped at ${cap}: ${Math.round(fast.shareS*100)}% of tokens sold within ${c.shortSec}s (${fast.nS}/${fast.of}), a copier can't keep up`:`capped at ${cap}${on.perfect?` (100 needs ${c.perfectN}+ tokens, all profitable)`:''}`]);if(few&&few[0])parts.push(few);return {score:Math.max(0,s1+(few?few[0]:0)),parts}};
   const add=(v,l)=>{if(v)parts.push([v,l])};
-  if(on.overall&&allW!=null&&form.all.n>=5){const lab=`${Math.round(allW)}% win over all ${form.all.n} trades analyzed`;if(allW<c.allLow)add(c.allLowPts,lab);else if(allW<c.allMid)add(c.allMidPts,lab)}
+  // filters turn a losing wallet profitable: its weak overall numbers and red days matter less, because a copier using the filters skips those trades
+  const rescued=on.rescue&&form&&form.kept&&form.kept.n>=c.rescueN&&form.kept.pnl>0&&form.all.pnl<0,rTag=' (softened: filters make it profitable)';
+  if(on.overall&&allW!=null&&form.all.n>=5){const lab=`${Math.round(allW)}% win over all ${form.all.n} trades analyzed`,v=allW<c.allLow?c.allLowPts:allW<c.allMid?c.allMidPts:0;
+    if(v)rescued?add(Math.round(v*c.rescueAll/100),lab+rTag):add(v,lab)}
   // filters make the difference: much more profit inside the filters than without them (a loser overall counts as the biggest jump)
   if(on.edge&&form&&form.kept&&form.kept.n>=c.edgeN&&form.kept.pnl>=c.edgeMin){const k=form.kept,a=form.all,x=a.pnl>0?k.pnl/a.pnl:Infinity,up=(k.win-a.win)*100;
     const lab=`filters: ${sol(k.pnl)} vs ${sol(a.pnl)} without${x!==Infinity?` (${x>=10?Math.round(x):+x.toFixed(1)}×)`:''}`;
@@ -224,7 +227,7 @@ function adjustScore(base,buys7,est,hold,p7,perfect,n,fast,rs,trades7,form){ // 
   if(on.p7&&p7){
     if(p7.pos>p7.neg){const v=p7.perDay<c.g1?c.gP1:p7.perDay<c.g2?c.gP2:p7.perDay<c.g3?c.gP3:c.gP4;add(v,`${p7.pos}/${p7.days} days green, ~${usd0(p7.perDay)}/day`)}
     else if(allRed)add(c.allRedPts,`all ${p7.days} trading day${p7.days===1?'':'s'} red in 7d, ${usd0(p7.totUsd)}`);
-    else if(p7.neg>p7.pos)add(p7.totUsd<0?c.redLossPts:c.redPts,`${p7.neg}/${p7.days} days red, ${usd0(p7.totUsd)} in 7d`)}
+    else if(p7.neg>p7.pos){const v=p7.totUsd<0?c.redLossPts:c.redPts,lab=`${p7.neg}/${p7.days} days red, ${usd0(p7.totUsd)} in 7d`;rescued&&v<c.rescueRed?add(c.rescueRed,lab+rTag):add(v,lab)}}
   if(rs&&rs.checked>=c.sMinChecked){
     if(on.spike&&rs.spN>=c.sMinChecked&&rs.share*100>=c.sT1){const sh=rs.share*100;add(sh>=c.sT3?c.sP3:sh>=c.sT2?c.sP2:c.sP1,`${rs.heavy}/${rs.spN} buys spiked ${c.spikeRise}%+ (copiers pay more)`)}
     if(on.spike&&rs.heavy>=2&&rs.heavy>rs.rt)add(c.sMorePts,`more heavy spikes (${rs.heavy}) than +${c.rtPct}% round-trips (${rs.rt})`);
@@ -236,6 +239,41 @@ function adjustScore(base,buys7,est,hold,p7,perfect,n,fast,rs,trades7,form){ // 
    A range at the bottom or top of the filter that wins under 35% (3+ trades) is cut, as long as what's left
    wins more often, still makes money, and keeps at least "Min trades per filter" trades. Middle ranges can't be cut by a min/max filter. */
 
+// big winners the recommended filters leave out: 2+ trades of +100% outside them. Shows the wider filter that would catch them,
+// and whether that range still holds up without them (if not, it's most likely luck, so the filters stay as they are)
+function bigWinners(A){
+  const f=A.best;if(!f)return null;const o=A.o,big=A.U.filter(t=>!inF(t,f)&&(adjRet(t,o)||0)>=1).sort((x,y)=>adjRet(y,o)-adjRet(x,o));if(big.length<2)return null;
+  const dn=(arr,v)=>{let r=arr[0];for(const x of arr)if(x<=v)r=x;return r},up=(arr,v)=>{for(const x of arr)if(x>v)return x;return Infinity};
+  const w={lo:Math.min(f.lo,dn(MC,Math.min(...big.map(t=>t.mcap)))),hi:Math.max(f.hi,up(MC,Math.max(...big.map(t=>t.mcap)))),slo:Math.min(f.slo,dn(SG,Math.min(...big.map(t=>t.firstSol)))),shi:Math.max(f.shi,up(SG,Math.max(...big.map(t=>t.firstSol))))};
+  const wl=A.U.filter(t=>inF(t,w)),ws=summarize(wl,o),rest=summarize(wl.filter(t=>!big.includes(t)),o),k=A.kept;
+  const holds=rest.n>=o.minN&&rest.pnl>k.pnl&&rest.win>=k.win-0.05; // still better without the big wins: a real edge, not luck
+  const names=big.slice(0,3).map(t=>`<b>${esc(NAMES[t.tok]||short(t.tok))}</b> <span class="pos">${pct(adjRet(t,o))}</span>`).join(', ')+(big.length>3?` and ${big.length-3} more`:'');
+  const wf=`${w.lo?fm(w.lo):'$0'}–${fm(w.hi)} market cap · ${w.slo===0&&w.shi===Infinity?'any buy size':(w.slo?fmS(w.slo):'0 SOL')+'–'+fmS(w.shi)}`;
+  const on=!!CUR.wideOn;
+  const html=`<div class="tipline bignote"><span class="tag big">Big winners left out</span> ${names} ${big.length>3?'are':big.length>1?'are both':'is'} outside these filters.
+    A wider filter (<button type="button" class="widebtn linkbtn">${wf}</button>) would make <b class="${cls(ws.pnl)}">${sol(ws.pnl)}</b> instead of ${sol(k.pnl)}, at ${Math.round(ws.win*100)}% win instead of ${Math.round(k.win*100)}%.
+    ${holds?`<b class="pos">Worth a look:</b> even without those ${big.length} trades the wider range makes ${sol(rest.pnl)} at ${Math.round(rest.win*100)}% win.`
+      :`<b>Not recommended yet:</b> without those ${big.length} trades the wider range makes ${sol(rest.pnl)} at ${Math.round(rest.win*100)}% win, so the extra profit depends on ${big.length} trades. Not enough trades yet to tell if it repeats.`}
+    <button type="button" class="run widebtn">${on?'Hide the wider filter':'Show stats with the wider filter'}</button></div>`;
+  return {html,w,list:wl,label:wf};
+}
+// token age filter: once market cap and buy size are set, also pick a min / max token age (time from the token's creation to
+// the wallet's buy) when that clearly does better: at least 15% higher on profit × win rate², still profitable, still enough trades
+function ageFilter(f,U,o){
+  if(!f||!o.ageF)return f;const list=U.filter(t=>inF(t,f)),known=list.filter(t=>t.age!=null);if(known.length<Math.max(6,Math.ceil(o.minN*0.6)))return f;
+  // age edges: the fixed steps plus whole days right around this wallet's own trades (so 30-day-old winners and 255-day-old losers
+  // can be split at 31 days, not just at the nearest fixed step)
+  const E=[...new Set([...AG,...known.filter(t=>t.age>=24).flatMap(t=>[Math.floor(t.age/24)*24,Math.ceil(t.age/24)*24+24])])].sort((x,y)=>x-y);
+  const val=s=>s.pnl>0?s.pnl*s.win*s.win:s.pnl,cur=summarize(list,o),need=Math.max(Math.min(o.minN,list.length-2),Math.ceil(list.length*0.4)),c=[];
+  for(let a=0;a<E.length;a++)for(let b=a+1;b<E.length;b++){if(a===0&&b===E.length-1)continue;
+    const sub=list.filter(t=>t.age==null||(t.age>=E[a]&&t.age<E[b]));if(sub.length<need||list.length-sub.length<2)continue;
+    const s=summarize(sub,o);if(s.pnl<=0)continue;const v=val(s);if(v>val(cur)*1.15)c.push({a,b,v,s})}
+  if(!c.length)return f;
+  // the widest range that's within 10% of the best one: a broad age rule holds up better than a narrow, lucky window
+  const top=Math.max(...c.map(x=>x.v)),best=c.filter(x=>x.v>=top*0.9).sort((x,y)=>y.s.n-x.s.n||y.v-x.v)[0];
+  if(!best)return f;
+  return {...f,alo:E[best.a],ahi:E[best.b],n:best.s.n,win:best.s.win,pnl:best.s.pnl,ageGain:{from:cur,to:best.s}};
+}
 function trimWeakEdges(best,U,o){
   if(!best)return {best,trims:[]};
   const f={...best},trims=[];
@@ -260,11 +298,11 @@ function trimWeakEdges(best,U,o){
 
 /* ---------- analysis ---------- */
 function analyze(){
-  const o=opts(),all=hydrate(CUR.raw,CUR.px,o);for(const t of all)t.dev=isDev(t.tok,CUR.wallet);
+  const o=opts(),all=hydrate(CUR.raw,CUR.px,o),ag=ageGet();for(const t of all){t.dev=isDev(t.tok,CUR.wallet);const c=ag[t.tok];t.age=c&&t.t>=c?(t.t-c)/3600:null} // age: hours since the token was created, at the wallet's first buy
   // period cut-off (Wallet tab only): tokens first bought in the last 7 / 14 / 30 days, or all of them
   const days=+SET.period||0,cut=days?(CUR.ref||CUR.pulled||Date.now()/1000)-days*86400:0,trades=days?all.filter(t=>t.t>=cut):all;
   const U=recent(trades,o).filter(t=>adjRet(t,o)!==null);
-  const base=summarize(U,o),{best:best0}=optimize(U,o),{best,trims}=trimWeakEdges(best0,U,o);
+  const base=summarize(U,o),{best:best0}=optimize(U,o),{best:best1,trims}=trimWeakEdges(best0,U,o),best=ageFilter(best1,U,o);
   const keptList=best?U.filter(t=>inF(t,best)):U;
   const kept=summarize(keptList,o);
   const sc=U.length?Math.round((best?kept.win:base.win)*100):null;
@@ -288,7 +326,7 @@ function rerender(){if(!CUR)return;const A=analyze();CUR.A=A;
   $('grade').textContent=A.best?g:'No reliable filter yet';$('grade').style.color=A.best?col:'var(--amber)';
   const k=A.kept,b=A.base;
   $('why').innerHTML=A.best
-    ?`Wins <b>${Math.round(k.win*k.n)} of ${k.n}</b> trades inside these filters${SC().on.winmin&&SC().winMin>0?` <span class="hint">(win = +${SC().winMin}% or more)</span>`:''}${k.n<15?' <span class="amb">· small sample</span>':''}. Without filters: <b>${Math.round(b.win*100)}%</b> of ${b.n}.`
+    ?`Wins <b>${Math.round(k.win*k.n)} of ${k.n}</b> trades inside these filters${SC().on.winmin&&SC().winMin>0?` <span class="hint">(win = +${SC().winMin}% or more)</span>`:''}${k.n<15?' <span class="amb">· small sample</span>':''}${(()=>{const q=A.U.filter(t=>inF(t,A.best)&&isQS(t)).length;return q?` <span class="neg">· ${q} QuickSell${q>1?'s':''} counted as loss${q>1?'es':''}</span>`:''})()}. Without filters: <b>${Math.round(b.win*100)}%</b> of ${b.n}.`
     :`Wins <b>${Math.round(b.win*100)}%</b> of ${b.n} trades, but no filter has at least ${A.o.minN} trades. Lower "Min trades per filter" or analyze more tokens.`;
   if(A.adj.perfect)$('why').innerHTML+=`<span class="adjline"><b class="gold">Perfect record: ${A.adj.perfect}/${A.adj.perfect} trades profitable → 100</b></span>`;
   else if(A.adj.parts.length)$('why').innerHTML+=`<span class="adjline">Win rate ${A.winScore}${A.adj.parts.map(([v,l])=>` <b class="${v<0?'neg':'pos'}">${v>0?'+':'−'}${Math.abs(v)}</b> ${esc(l)}`).join(' ·')}</span>`;
@@ -304,13 +342,14 @@ function rerender(){if(!CUR)return;const A=analyze();CUR.A=A;
   const wl=$('wlink');wl.href='https://gmgn.ai/sol/address/'+encodeURIComponent(CUR.wallet);wl.textContent=short(CUR.wallet)+' on GMGN ↗';
   // filters
   const f=A.best;
-  $('filters').innerHTML=f?[['Min market cap',f.lo?fm(f.lo):'$0',f.lo],['Max market cap',fm(f.hi),f.hi],['Min SOL buy',f.slo?fmS(f.slo):'0 SOL',f.slo],['Max SOL buy',fmS(f.shi),f.shi]]
+  $('filters').innerHTML=f?[['Min market cap',f.lo?fm(f.lo):'$0',f.lo],['Max market cap',fm(f.hi),f.hi],['Min SOL buy',f.slo?fmS(f.slo):'0 SOL',f.slo],['Max SOL buy',fmS(f.shi),f.shi]].concat(f.alo!=null?[['Min token age',f.alo?fmAge(f.alo):'Any',f.alo?fmAge(f.alo):''],['Max token age',fmAge(f.ahi),f.ahi===Infinity?'':fmAge(f.ahi)]]:[])
     .map(([n,v,raw])=>`<button type="button" class="fv" data-copy="${raw===Infinity?'':esc(raw)}"><span class="k">${n}</span><span class="v">${esc(v)}</span></button>`).join('')
     :'<p class="empty">Not enough trades to pick filters.</p>';
   $('kpis').innerHTML=[['Profit',sol(k.pnl),cls(k.pnl)],['Return',pct(k.roi),cls(k.roi)],['Trades kept',`${k.n}/${b.n}`,'']]
     .map(([n,v,c])=>`<div class="kpi"><span class="k">${n}</span><span class="v ${c}">${v}</span></div>`).join('')+
     (f?`<div class="kpi"><span class="k">All trades</span><span class="v ${cls(b.pnl)}">${sol(b.pnl)}</span></div><div class="kpi"><span class="k">All win rate</span><span class="v">${Math.round(b.win*100)}%</span></div>`:'');
   if(A.trims&&A.trims.length)$('kpis').innerHTML+=`<p class="tipline trimnote">Skips weak ranges: ${A.trims.map(esc).join(' · ')}.</p>`;
+  if(f&&f.ageGain){const a=f.ageGain.from,b=f.ageGain.to;$('kpis').innerHTML+=`<p class="tipline agenote"><span class="tag age">Token age</span> Only tokens ${f.alo?fmAge(f.alo)+' to '+fmAge(f.ahi):'under '+fmAge(f.ahi)} old when it bought${f.alo&&f.ahi===Infinity?'':''}: ${Math.round(a.win*100)}% → <b>${Math.round(b.win*100)}%</b> win, ${sol(a.pnl)} → <b class="${cls(b.pnl)}">${sol(b.pnl)}</b> (${a.n-b.n} trade${a.n-b.n>1?'s':''} left out).</p>`}
   {const qs=A.U.filter(isQS),inside=A.best?qs.filter(t=>inF(t,A.best)):qs;
     if(qs.length)$('kpis').innerHTML+=`<p class="tipline qsnote"><span class="tag qs">QuickSell Low MC</span> ${qs.length} token${qs.length>1?'s were':' was'} sold within ${SC().qsSec}s after buying under ${fm(SC().qsMc)}. Counted as losses: a copy bot buys later and can't sell that fast.${inside.length?` <b>Suggested: Min market cap ${fm(SC().qsMc)}</b> to block ${inside.length>1?'them':'it'}.`:A.best&&A.best.lo>=SC().qsMc?' Your Min market cap already blocks them.':''}</p>`}
   renderCmp(A);
@@ -330,6 +369,7 @@ function cmpStats(list,o,ref){const rs=list.map(t=>[t,adjRet(t,o)]).filter(([,r]
 function renderCmp(A){
   const card=$('cmpcard');if(!A.best||!A.U.length){card.hidden=true;return}card.hidden=false;
   const ref=CUR.ref||CUR.pulled,f=cmpStats(A.keptList,A.o,ref),a=cmpStats(A.U,A.o,ref);if(!f||!a){card.hidden=true;return}
+  const bw=bigWinners(A),wd=bw&&CUR.wideOn?cmpStats(bw.list,A.o,ref):null; // the wider filter that would catch the big winners, shown as a column when asked
   const better=(x,y,hi=true)=>x==null||y==null||Math.abs(x-y)<1e-9?'':(hi?x>y:x<y)?' up':' down';
   const rows=[['Trades',f.n,a.n,v=>String(v),null],
     ['Win rate',f.win,a.win,v=>Math.round(v*100)+'%',true],
@@ -340,9 +380,12 @@ function renderCmp(A){
     ['+100% wins',f.big,a.big,v=>String(v),true],
     ['Median hold',f.hold,a.hold,v=>v==null?'–':fmtHold(v),null],
     ['Last 7 days',f.recWin,a.recWin,(v,x)=>v==null?'no trades':Math.round(v*100)+'% win · '+x.recN,true]];
-  $('cmp').innerHTML=`<div class="cmph"><span></span><span>With filters</span><span>All trades</span></div>`+rows.map(([k,x,y,fmt,hi])=>`<div class="cmpr"><span class="k">${k}</span>
-    <b class="${hi==null?'':better(x,y,hi).trim()}">${esc(fmt(x,f))}</b><b>${esc(fmt(y,a))}</b></div>`).join('')+
-    `<p class="tipline">${f.pnl>a.pnl?`The filters keep <b>${f.n}</b> of ${a.n} trades and add <b class="pos">${sol(f.pnl-a.pnl)}</b> by skipping the rest.`:`Copying every trade would have made <b class="${cls(a.pnl-f.pnl)}">${sol(a.pnl-f.pnl)}</b> more than the filters.`}</p>`;
+  const wv={'Trades':'n','Win rate':'win','Profit':'pnl','Return':'roi','Avg win':'avgWin','Avg loss':'avgLoss','+100% wins':'big','Median hold':'hold','Last 7 days':'recWin'};
+  $('cmp').classList.toggle('cmpw',!!wd);
+  $('cmp').innerHTML=`<div class="cmph"><span></span><span>With filters</span>${wd?'<span class="wdh">Wider</span>':''}<span>All trades</span></div>`+rows.map(([k,x,y,fmt,hi])=>`<div class="cmpr"><span class="k">${k}</span>
+    <b class="${hi==null?'':better(x,y,hi).trim()}">${esc(fmt(x,f))}</b>${wd?`<b class="wd ${hi==null?'':better(wd[wv[k]],x,hi).trim()}">${esc(fmt(wd[wv[k]],wd))}</b>`:''}<b>${esc(fmt(y,a))}</b></div>`).join('')+
+    `<p class="tipline">${f.pnl>a.pnl?`The filters keep <b>${f.n}</b> of ${a.n} trades and add <b class="pos">${sol(f.pnl-a.pnl)}</b> by skipping the rest.`:`Copying every trade would have made <b class="${cls(a.pnl-f.pnl)}">${sol(a.pnl-f.pnl)}</b> more than the filters.`}</p>`+(wd?`<p class="tipline wdline">Wider = <b>${esc(bw.label)}</b>. A preview only: the score and recommended filters stay the same.</p>`:'')+(bw?bw.html:'');
+  $('cmp').querySelectorAll('.widebtn').forEach(b=>b.addEventListener('click',()=>{CUR.wideOn=!CUR.wideOn;renderCmp(CUR.A)}));
 }
 
 /* ---------- buy size & market cap: win rate for the sizes and entries this wallet actually uses ---------- */
@@ -378,10 +421,10 @@ function szTable(rows,title,what){
     ${best?`<p class="tipline">Best ${what}: <b>${esc(best.label)}</b> · ${Math.round(best.s.win*100)}% win over ${best.s.n} trades${worst&&worst!==best?`. Weakest: ${esc(worst.label)} (${Math.round(worst.s.win*100)}% win)`:''}.</p>`:''}</div>`}
 function renderSZ(A){
   const list=A.U,o=A.o,card=$('szcard');
-  const sz=sizeGroups(list),mc=mcGroups(list);
+  const sz=sizeGroups(list),mc=mcGroups(list),ak=list.filter(t=>t.age!=null),ageG=ak.length>=6?[[0,1,'under 1h'],[1,6,'1–6h'],[6,24,'6–24h'],[24,72,'1–3 days'],[72,216,'3–9 days'],[216,720,'9–30 days'],[720,2160,'30–90 days'],[2160,Infinity,'90+ days']].map(([lo,hi,label])=>({lo,hi,label})):null;
   const hi=list.filter(t=>t.mcap>0).sort((a,b)=>b.mcap-a.mcap).slice(0,5);
   const hiLine=hi.length?`<p class="tipline">Highest entries: ${hi.map(t=>{const r=adjRet(t,o);return `<b>${fm(t.mcap)}</b>${r==null?'':` <span class="${cls(r)}">${pct(r)}</span>`}`}).join(' · ')}</p>`:'';
-  const h=(sz?szTable(groupRows(list,sz,t=>t.firstSol,o),'Buy size','buy size'):'')+(mc?szTable(groupRows(list,mc,t=>t.mcap,o),'Entry market cap','entry').replace(/<\/div>$/,hiLine+'</div>'):'');
+  const h=(sz?szTable(groupRows(list,sz,t=>t.firstSol,o),'Buy size','buy size'):'')+(ageG?szTable(groupRows(ak,ageG,t=>t.age,o),'Token age at buy','token age'):'')+(mc?szTable(groupRows(list,mc,t=>t.mcap,o),'Entry market cap','entry').replace(/<\/div>$/,hiLine+'</div>'):'');
   card.hidden=!h;$('szbody').innerHTML=h+(h?mcqBox():'');if(h)mcqRun();
 }
 /* ---------- "how does it do under $X?": your own market cap cut-off, split into under vs over ---------- */
@@ -479,22 +522,36 @@ function renderRT(A){
       h+=`<p class="tipline">${sAdj.length?'Score: '+sAdj.map(([v,l])=>`<b class="${v<0?'neg':'pos'}">${v>0?'+':'−'}${Math.abs(v)}</b> ${esc(l)}`).join(' · '):rs.checked<4?'Check 4+ tokens to count this in the score.':''}</p>`.replace('<p class="tipline"></p>','');
     }
   }else h+=`<p class="empty">Shows how often this wallet lets winners turn into losses, and how much the price jumps on its buys.</p>`;
-  if(left)h+=`<button type="button" class="run" id="runchk">Check ${left} token${left>1?'s':''} ${scope} · about ${left*20} credits</button>`;
+  if(CHK.on&&CUR&&CHK.wallet===CUR.wallet)h+=chkBar();
+  else{if(CHK.fail&&CHK.wallet===(CUR&&CUR.wallet)&&left)h+=`<p class="tipline amb">${CHK.fail} token${CHK.fail>1?'s':''} couldn't be checked last time (${esc(CHK.why||'Helius busy or no price data')}). The button tries ${CHK.fail>1?'them':'it'} again.</p>`;
+    if(left)h+=`<button type="button" class="run" id="runchk">Check ${left} token${left>1?'s':''} ${scope} · about ${left*20} credits</button>`}
   $('rtbody').innerHTML=h;
   const rb=$('runchk');if(rb)rb.addEventListener('click',runCheck);
 }
 let checking=false;
+// progress of the spike & round-trip check, shown as a bar in the Round-trips card (in place of the Check button)
+const CHK={on:false,wallet:'',done:0,total:0,fail:0,why:'',t0:0};
+function chkBar(){const p=CHK.total?CHK.done/CHK.total:0,left=CHK.total-CHK.done,per=CHK.done?(Date.now()-CHK.t0)/CHK.done:null;
+  const eta=per&&left?` · about ${fmtSecs(left*per/1000)} left`:left&&!CHK.done?' · starting (the first token can take up to a minute)':'';
+  return `<div class="chkprog" id="chkprog"><div class="chkbar${CHK.done?'':' wait'}"><i style="width:${Math.max(3,Math.round(p*100))}%"></i></div>
+    <div class="chkline">Checking <b>${CHK.done} of ${CHK.total}</b> tokens${eta}${CHK.fail?` · <span class="amb">${CHK.fail} failed</span>`:''}</div></div>`}
+const fmtSecs=s=>s<60?Math.max(1,Math.round(s))+'s':Math.floor(s/60)+'m '+String(Math.round(s%60)).padStart(2,'0')+'s';
+const paintChk=()=>{const el=$('chkprog');if(el)el.outerHTML=chkBar()};
 async function runCheck(){
-  if(checking||!CUR||!CUR.A)return;const key=getKey();if(!key){status('Add your Helius key in Settings first.',true);return}
-  const list=chkList(CUR.A).filter(t=>!oppGet(t));if(!list.length)return;
-  checking=true;const rb=$('runchk');if(rb)rb.disabled=true;
-  let done=0,next=0,credits=0,fatal=null,last=0;const t0=Date.now(),wallet=CUR.wallet;try{
-  const tick=()=>{const left=list.length-done,per=done?(Date.now()-t0)/done:900;status(`Checking ${done} of ${list.length}${left?` · about ${Math.max(1,Math.round(left*per/1000))}s left`:''}`);if(Date.now()-last>1500){last=Date.now();rerender()}};
-  const worker=async()=>{while(!fatal&&next<list.length){const t=list[next++];try{const v=await checkToken(t,key,wallet);credits+=v.credits;oppPut(t,v)}catch(e){if(/key/i.test(e.message))fatal=e}done++;tick()}};
+  if(checking){status('The spike & round-trip check is already running: see the progress bar in Round-trips.');return}
+  if(!CUR||!CUR.A)return;const key=getKey();if(!key){status('Add your Helius key in Settings first.',true);return}
+  const list=chkList(CUR.A).filter(t=>!oppGet(t));if(!list.length){status('Every token in scope is already checked.');return}
+  checking=true;const wallet=CUR.wallet;Object.assign(CHK,{on:true,wallet,done:0,total:list.length,fail:0,why:'',t0:Date.now()});rerender();
+  let next=0,credits=0,fatal=null,last=0;const ticker=setInterval(paintChk,1000);try{
+  const tick=()=>{status(`Checking spikes & round-trips · ${CHK.done} of ${list.length}`);paintChk();if(Date.now()-last>1500){last=Date.now();rerender()}};
+  // one stuck lookup can't freeze the check: each token gets 90s, then it's counted as failed and the check moves on
+  const limit=(p,ms)=>Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error('timed out')),ms))]);
+  const worker=async()=>{while(!fatal&&next<list.length){const t=list[next++];try{const v=await limit(checkToken(t,key,wallet),90000);credits+=v.credits;oppPut(t,v)}catch(e){if(/key/i.test(e.message))fatal=e;else{CHK.fail++;CHK.why=/timed out/.test(e.message)?'took too long':/429|rate|busy/i.test(e.message)?'Helius busy':'no trade data found'}}CHK.done++;tick()}};
   tick();await Promise.all(Array.from({length:Math.min(2,list.length)},worker)); // 2 at a time: the free Helius plan's limit
-  }finally{checking=false} // never left marked as running if something fails part-way
-  checking=false;rerender();hubPush().catch(()=>{});
-  status(fatal?fatal.message:`Checked ${list.length} tokens · about ${credits} Helius credits.`,!!fatal);
+  }finally{checking=false;CHK.on=false;clearInterval(ticker)} // never left marked as running if something fails part-way
+  rerender();hubPush().catch(()=>{});
+  const ok=list.length-CHK.fail;
+  status(fatal?fatal.message:`Checked ${ok} of ${list.length} tokens${CHK.fail?` · ${CHK.fail} failed (${CHK.why}), press Check to retry`:''} · about ${credits} Helius credits.`,!!fatal||CHK.fail>0);
 }
 
 /* ---------- token list ---------- */
@@ -511,9 +568,10 @@ function renderToks(A){
   $('toks').innerHTML=show.length?show.map(t=>{const r=adjRet(t,o),inside=!A.best||inF(t,A.best),nm=NAMES[t.tok]||short(t.tok),full=(meta[t.tok]&&meta[t.tok][2])||'';
     const rt=rtOf(t,o),sp=spikeOf(t);
     const tags=(rt!=null&&rt>=0.5?`<span class="tag rt" title="Was up ${pct(rt)} before it closed red">RT ${pct(rt)}</span>`:'')+(isQS(t)?`<span class="tag qs" title="Sold within ${SC().qsSec}s, bought under ${fm(SC().qsMc)} market cap: a copy bot would most likely lose here, so it counts as a loss">QuickSell Low MC</span>`:'')+(sp&&sp.rise>=0.15?`<span class="tag spk" title="Price jumped this much within one block of its buy">spike ${pct(sp.rise)}</span>`:'')+(t.rounds>1?`<span class="tag rnd" title="Bought in and sold out ${t.rounds} separate times${t.cut?'; only the first '+o.maxRounds+' counted':''}">${t.cut?o.maxRounds+'/':''}${t.rounds}×</span>`:'')+(t.dev?'<span class="tag devt" title="This wallet created this token (it signed the token\'s first transaction)">DEV</span>':'')+(cnt[tick(t)]>1?'<span class="tag dup" title="Another token here uses the same ticker">same ticker</span>':'');
-    return `<div class="tk${inside?'':' out'}${t.dev?' dev':''}">
+    const qsIn=A.best&&inside&&isQS(t);
+    return `<div class="tk${inside?'':' out'}${t.dev?' dev':''}${qsIn?' qsin':''}"${qsIn?` title="QuickSell inside the filters: profitable for the wallet, but a copy bot buys later and can't sell that fast, so it counts as a loss (${pct(SC().qsLoss/100)}) and not as a win"`:''}>
       <div style="min-width:0"><a class="nm gm" href="${esc(tokUrl(t.tok,CUR.wallet))}" target="_blank" rel="noopener" title="${esc((full?full+' · ':'')+t.tok)}">${esc(nm)}${tags}</a>
-        <div class="sub">${ago(t.t)} ago · ${(+t.firstSol.toFixed(2))} SOL${t.platD?' · '+esc(t.platD):''}${full&&cnt[tick(t)]>1?' · '+esc(full):''}</div></div>
+        <div class="sub">${ago(t.t)} ago · ${(+t.firstSol.toFixed(2))} SOL${t.age!=null?' · token '+fmAge(t.age)+' old':''}${t.platD?' · '+esc(t.platD):''}${full&&cnt[tick(t)]>1?' · '+esc(full):''}</div></div>
       <div class="mc">${fm(t.mcap)}<div class="sub">MC</div></div>
       <div class="res ${r==null?'':r>0&&!isWin(r)?'amb':cls(r)}" ${r!=null&&r>0&&!isWin(r)?`title="Under +${SC().winMin}%: counted as a loss for the win rate"`:''}>${r==null?'<span class="hint">open</span>':t.open?'<span class="neg">unsold</span>':pct(r)+(t.held?`<div class="sub" title="${Math.round(t.held.frac*100)}% of the position is still held, valued at today's price">held</div>`:'')}</div></div>`}).join('')
     :'<p class="empty">No tokens inside these filters.</p>';
@@ -606,6 +664,7 @@ const SC_UI=[
   {id:'few',t:'Too few tokens',d:'Applied after the cap, so bonuses can\'t cancel it.',f:[['few1','1 token'],['few2','2 tokens']]},
   {id:'spike',t:'Entry spikes',d:'Needs the round-trip & spike check. Price jumping within a block of its buys means copiers pay more.',f:[['spikeRise','Heavy spike (% jump)'],['sMinChecked','Min tokens checked'],['sT1','At (% of buys)'],['sP1','Points'],['sT2','At (%)'],['sP2','Points'],['sT3','At (%)'],['sP3','Points'],['sMorePts','More spikes than round-trips']]},
   {id:'rt',t:'Round-trips',d:'Needs the round-trip & spike check. Trades that went up this much before closing red: take-profit upside.',f:[['rtPct','Round-trip (% up)'],['rtN1','At (trades)'],['rP1','Points'],['rtN2','At (trades)'],['rP2','Points'],['rtN3','At (trades)'],['rP3','Points']]},
+  {id:'rescue',t:'Filters make it profitable',d:'When the wallet loses money overall but is profitable inside the recommended filters, the red-days penalty is reduced to this and the overall win rate penalty is cut to this share. A copier using the filters skips the losing trades.',f:[['rescueN','Min trades in filters'],['rescueRed','Red days penalty becomes (points)'],['rescueAll','Overall win rate penalty kept (%)']]},
   {id:'winhi',t:'High win rate',d:'Bonus when the win rate inside the filters is above this, over at least this many trades.',f:[['winHi','Above (% win)'],['winHiN','Min trades in filters'],['winHiPts','Points']]},
   {id:'edge',t:'Filters make the difference',d:'Bonus when the wallet makes far more profit inside the recommended filters than without them (losing overall but profitable in the filters counts as the biggest jump).',f:[['edgeN','Min trades in filters'],['edgeMin','Min profit in filters (SOL)'],['edgeX1','At (× the no-filter profit)'],['edgePts1','Points'],['edgeX2','Bigger at (×)'],['edgeWinUp','and win rate up (pts)'],['edgePts2','Points']]},
   {id:'weak',t:'Weak filter ranges',d:'Market-cap or buy-size ranges at the edge of the filters that win less than this are cut.',f:[['weakWin','Cut under (% win)']]}];
@@ -638,19 +697,25 @@ $('period').addEventListener('click',e=>{const b=e.target.closest('button');if(!
 /* ---------- Wallet Score on GMGN pages: the analysis is shared with gm.js (runs on gmgn.ai) through chrome.storage ---------- */
 const gmStore=typeof chrome!=='undefined'&&chrome.storage&&chrome.storage.local;
 function gmSet(obj){if(!gmStore)return;try{chrome.storage.local.set(obj)}catch(e){}}
+// per-token labels for GMGN pages (In / Out of filter, DEV, Spike, RT, QuickSell): used by the full analysis and by Top traders / Automatic scores
+function gmTokensOf(trades,o,best){const tokens={};let devN=0;for(const t of recent(trades,{...o,noDev:false})){if(t.dev)devN++;const r=adjRet(t,o),sp=spikeOf(t),rt=rtOf(t,o);
+    tokens[t.tok]={r:r==null?null:Math.round(r*1000)/1000,out:!!(best&&!inF(t,best)),held:!!t.held,open:!!t.open,qs:isQS(t),sp:sp&&sp.rise>=0.15?Math.round(sp.rise*100):null,rt:rt!=null&&rt>=0.5?Math.round(rt*100):null,dev:!!t.dev}}
+  return {tokens,devN}}
+const gmFilters=f=>f?{lo:f.lo,hi:f.hi===Infinity?null:f.hi,slo:f.slo,shi:f.shi===Infinity?null:f.shi,alo:f.alo!=null?f.alo:null,ahi:f.alo!=null&&f.ahi!==Infinity?f.ahi:null}:null;
 function gmPublish(A){if(!gmStore||!CUR)return;const o=A.o,[g,col]=gradeOf(A.best?A.score:null);
-  const tokens={};let devN=0;for(const t of recent(A.trades,{...o,noDev:false})){if(t.dev)devN++;const r=adjRet(t,o),sp=spikeOf(t),rt=rtOf(t,o);
-    tokens[t.tok]={r:r==null?null:Math.round(r*1000)/1000,out:!!(A.best&&!inF(t,A.best)),held:!!t.held,open:!!t.open,qs:isQS(t),sp:sp&&sp.rise>=0.15?Math.round(sp.rise*100):null,rt:rt!=null&&rt>=0.5?Math.round(rt*100):null,dev:!!t.dev}}
+  const {tokens,devN}=gmTokensOf(A.trades,o,A.best);
   const f=A.best,ref=CUR.ref||CUR.pulled,cf=f?cmpStats(A.keptList,o,ref):null,ca=cmpStats(A.U,o,ref);
   const warn=A.adj.parts.filter(p=>p[0]<0).sort((a,b)=>a[0]-b[0]).slice(0,4).map(p=>p[1]);
   gmSet({['gm:'+CUR.wallet]:{w:CUR.wallet,at:Date.now(),score:A.score,grade:A.best?g:'No reliable filter yet',col,
-    filters:f?{lo:f.lo,hi:f.hi===Infinity?null:f.hi,slo:f.slo,shi:f.shi===Infinity?null:f.shi}:null,
+    filters:gmFilters(f),
     f:cf?{n:cf.n,win:cf.win,pnl:cf.pnl}:null,a:ca?{n:ca.n,win:ca.win,pnl:ca.pnl}:null,warn,winMin:SC().on.winmin?SC().winMin:0,dev:{n:devN,off:!!o.noDev},tokens}});
   gmTrim();
 }
-function gmPublishLite(w,s){if(!gmStore||!s||s.score==null)return; // Top traders / Automatic scores: score only (no per-token tags)
-  chrome.storage.local.get('gm:'+w,r=>{const old=r&&r['gm:'+w];if(old&&old.tokens&&old.at>Date.now()-6e5)return;const [g,col]=gradeOf(s.reliable?s.score:null);
-    gmSet({['gm:'+w]:{w,at:Date.now(),score:s.score,grade:s.reliable?g:'No reliable filter yet',col,lite:true,warn:(s.parts||[]).filter(p=>p[0]<0).sort((a,b)=>a[0]-b[0]).slice(0,4).map(p=>p[1]),f:s.n?{n:s.n,win:(s.win??0)/100,pnl:s.pnl}:null,a:s.all?{n:s.all,win:s.allWin,pnl:s.allPnl}:null,tokens:old&&old.tokens||null}})})}
+function gmPublishLite(w,s){if(!gmStore||!s||s.score==null)return; // Top traders / Automatic scores: score, filters and token labels from the quick pull
+  chrome.storage.local.get('gm:'+w,r=>{const old=r&&r['gm:'+w];if(old&&old.tokens&&!old.lite&&old.at>Date.now()-6e5)return; // a full analysis from the last 10 minutes stays
+    const [g,col]=gradeOf(s.reliable?s.score:null),G=s._gm;
+    gmSet({['gm:'+w]:{w,at:Date.now(),score:s.score,grade:s.reliable?g:'No reliable filter yet',col,lite:true,warn:(s.parts||[]).filter(p=>p[0]<0).sort((a,b)=>a[0]-b[0]).slice(0,4).map(p=>p[1]),f:s.n?{n:s.n,win:(s.win??0)/100,pnl:s.pnl}:null,a:s.all?{n:s.all,win:s.allWin,pnl:s.allPnl}:null,
+      winMin:SC().on.winmin?SC().winMin:0,filters:G?G.filters:(old&&old.filters)||null,dev:G?{n:G.devN,off:false}:(old&&old.dev)||null,tokens:G?G.tokens:(old&&old.tokens)||null}});gmTrim()})}
 let gmTrimT=0;function gmTrim(){clearTimeout(gmTrimT);gmTrimT=setTimeout(()=>{if(!gmStore)return;chrome.storage.local.get(null,all=>{const ks=Object.keys(all).filter(k=>k.startsWith('gm:')&&all[k]&&all[k].w).sort((a,b)=>(all[b].at||0)-(all[a].at||0));if(ks.length>300)chrome.storage.local.remove(ks.slice(300))})},2000)}
 $('gmgn').checked=SET.gmgn!==false;gmSet({'gm:on':SET.gmgn!==false});
 $('gmgn').addEventListener('change',()=>{SET.gmgn=$('gmgn').checked;saveSet();gmSet({'gm:on':SET.gmgn})});
@@ -667,7 +732,7 @@ const LS_CATS=[
   {id:'meta',name:'Token names',test:k=>k==='ff-meta'||k==='ms-tokens',lose:'Looked up again when needed (a few credits)'},
   {id:'tt',name:'Last Top traders search',test:k=>k==='tt-last',lose:'The last list won\'t reopen by itself'},
   {id:'px',name:'Today\'s prices & logs',test:k=>k==='ff-curpx'||k==='ms-log',lose:'Nothing: rebuilt for free'},
-  {id:'dev',name:'Dev & platform checks',test:k=>k==='ff-dev'||k==='ff-plat',lose:'Checked again on the next analysis (credits)'},
+  {id:'dev',name:'Dev & platform checks',test:k=>k==='ff-dev'||k==='ff-plat'||k==='ff-age',lose:'Checked again on the next analysis (credits)'},
   {id:'sc',name:'Wallet scores & History list',test:k=>k.startsWith('ws-tts:')||k.startsWith('ws-score:')||k==='ff-hist'||k==='ws-tt',keep:true,lose:'Clear these from the History tab'},
   {id:'etc',name:'Settings, keys & other',test:()=>true,keep:true}];
 function lsBreakdown(){const out=LS_CATS.map(c=>({...c,n:0,ch:0,keys:[]}));

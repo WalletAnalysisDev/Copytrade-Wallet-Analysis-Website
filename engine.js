@@ -16,7 +16,7 @@ function hydrate(raw,px,o){
     return {tok:a[0],t:a[1],buyUsd,sellUsd:a[3]*(a[13]?proc/a[13]:1),buySol,sellSol:proc,firstSol:a[5],mcap,est:a[14]>0,sold,
       sellMc:a[10]>0?a[15]/a[10]*(a[16]||o.supply):null,
       pool:a[21]||null,solUsd:a[22]||null,pxIn:a[21]?a[4]:null,pxOut:a[21]&&a[10]>0&&a[15]?a[15]/a[10]:null,lastSell:a[8]||0,
-      R,rounds:R?R.length:1,cut,pool0:a[27]||a[21]||null,platD:platGet()[a[27]||a[21]]||null,plat:platFam(platGet()[a[27]||a[21]])||null,nb:a[6],ns:a[7],tin:a[17]||0,tout:a[18]||0,hold:a[8]?(a[8]-a[1])/60:null,last:a[11],ret,open:sold<0.02&&mtm==null,held:mtm!=null?{val:mtm,frac:1-sold}:null,
+      R,rounds:R?R.length:1,cut,pool0:a[27]||a[21]||null,platD:platGet()[a[27]||a[21]]||null,plat:platFam(platGet()[a[27]||a[21]])||null,nb:a[6],ns:a[7],tin:a[17]||0,tout:a[18]||0,hold:a[8]?(a[8]-a[1])/60:null,dump:a[28]?(a[28]-a[1])/60:null,last:a[11],ret,open:sold<0.02&&mtm==null,held:mtm!=null?{val:mtm,frac:1-sold}:null,
       route:STABLE.has(a[0])||mcap>5e6||(Math.abs(ret)<0.01&&a[6]>=2&&a[7]>=1)}});
 }
 /* most recent N tokens bought (by first buy time), after dropping swap-route tokens */
@@ -46,21 +46,22 @@ const SC_DEF={perfectN:9,cap:99, few1:-25,few2:-15, winLow:35,winLowPts:-50,winM
   g1:100,gP1:5,g2:300,gP2:10,g3:1000,gP3:15,gP4:20,redPts:-20,redLossPts:-30,allRedPts:-50,
   spikeRise:50,sMinChecked:4,sT1:50,sP1:-10,sT2:65,sP2:-15,sT3:80,sP3:-20,sMorePts:-5, rtPct:100,rtN1:2,rP1:3,rtN2:3,rP2:5,rtN3:5,rP3:8,
   qsSec:15,qsMc:5000,qsLoss:-20, weakWin:35,
-  allLow:25,allLowPts:-20,allMid:40,allMidPts:-10,perfAll:40, recMinN:5,recLow:30,recLowPts:-30,recMid:45,recMidPts:-10,recNone:-15, shortSec:40,shortShare:50,shortCap:60, winMin:20,
-  edgeN:10,edgeMin:2,edgeX1:3,edgePts1:10,edgeX2:5,edgeWinUp:10,edgePts2:20, winHi:50,winHiPts:15,winHiN:5};
-const SC_RULES=['perfect','few','win','act','hold','fast','flip','p7','spike','rt','qs','weak','overall','form','short','winmin','edge','winhi'];
+  allLow:25,allLowPts:-20,allMid:40,allMidPts:-10,perfAll:40, recMinN:5,recLow:30,recLowPts:-30,recMid:45,recMidPts:-10,recNone:-15, shortSec:40,shortShare:50,shortCap:60, winMin:10,
+  edgeN:10,edgeMin:2,edgeX1:3,edgePts1:10,edgeX2:5,edgeWinUp:10,edgePts2:20, winHi:50,winHiPts:15,winHiN:5, rescueN:5,rescueRed:-5,rescueAll:50};
+const SC_RULES=['perfect','few','win','act','hold','fast','flip','p7','spike','rt','qs','weak','overall','form','short','winmin','edge','winhi','rescue'];
 let SC_C=null;
 function scSaved(){try{return JSON.parse(localStorage.getItem('ws-scoring')||'null')||{}}catch(e){return {}}}
 function SC(){if(SC_C)return SC_C;const s=scSaved(),custom=s.mode==='custom',v={...SC_DEF,...(custom?s.v||{}:{})},on={};
   for(const r of SC_RULES)on[r]=custom?!(s.off||[]).includes(r):true;return SC_C={...v,on,custom}}
 const scReset=()=>{SC_C=null};
-/* a trade only counts as a win at +winMin% or more (default 20%); smaller gains are 'mid' trades and count as losses for the win rate (profit is unchanged) */
+/* a trade only counts as a win at +winMin% or more (default 10%); smaller gains are 'mid' trades and count as losses for the win rate (profit is unchanged) */
 const isWin=r=>{if(r==null||r<=0)return false;const c=SC();return !c.on.winmin||r>=c.winMin/100};
 try{addEventListener('storage',e=>{if(e.key==='ws-scoring')scReset()})}catch(e){}
 function scVer(){const c=SC();return c.custom?'c'+JSON.stringify(c).split('').reduce((h,ch)=>(h*31+ch.charCodeAt(0))|0,7):'a'} // changes whenever the rules change, so saved scores get redone
 /* QuickSells Low MC: sold within a few seconds of buying, entry at a low market cap. The wallet may book a profit,
    but a copy bot buys a block or two later at a higher price and can't sell that fast, so for the copier it's a loss. */
-const isQS=t=>{const c=SC();return c.on.qs&&!t.open&&t.hold!=null&&t.hold*60<c.qsSec&&t.mcap>0&&t.mcap<c.qsMc};
+// timed to when half the first buy-in was sold, so a token dumped in 2s with a few small sells trickling out later still counts
+const isQS=t=>{const c=SC(),h=t.dump!=null?t.dump:t.hold;return c.on.qs&&!t.open&&h!=null&&h*60<c.qsSec&&t.mcap>0&&t.mcap<c.qsMc};
 function adjRet(t,o){if(t.open)return o.openLoss?-1:null;const r=(1+t.ret)/(1+o.slip)-1;return o.qsLow!==false&&isQS(t)?Math.min(r,SC().qsLoss/100):r}
 function summarize(list,o){let n=0,w=0,pnl=0,inv=0;for(const t of list){const r=adjRet(t,o);n++;if(isWin(r))w++;pnl+=r*t.buySol;inv+=t.buySol}
   return{n,win:n?w/n:0,pnl,inv,roi:inv?pnl/inv:0}}
@@ -81,7 +82,9 @@ function optimize(list,o){
     }}
   return{best,robust};
 }
-const inF=(t,f)=>f&&t.mcap>=f.lo&&t.mcap<f.hi&&t.firstSol>=f.slo&&t.firstSol<f.shi;
+const inF=(t,f)=>f&&t.mcap>=f.lo&&t.mcap<f.hi&&t.firstSol>=f.slo&&t.firstSol<f.shi&&(f.alo==null||t.age==null||(t.age>=f.alo&&t.age<f.ahi)); // token age: unknown ages pass
+const AG=[0,0.25,1,3,6,12,24,72,168,216,336,720,1080,1440,2160,4320,8760,Infinity]; // token age steps in hours: 15m … 1d, 3d, 7d, 9d, 14d, 30d, 45d, 60d, 90d, 180d, 1y
+const fmAge=h=>h===Infinity?'No max':h<1?Math.round(h*60)+'m':h<48?(+h.toFixed(h<10?1:0))+'h':Math.round(h/24)+'d';
 
 const WSOL='So11111111111111111111111111111111111111112';
 const isAddr=v=>/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(v);
@@ -233,21 +236,26 @@ async function poolPrice(P,mint,ts,key,solUsd){ // USD per token in the pool's l
 let DEVC=null;
 function devGet(){if(!DEVC){try{DEVC=JSON.parse(localStorage.getItem('ff-dev')||'{}')}catch(e){DEVC={}}}return DEVC}
 function devSave(d){let cur={};try{cur=JSON.parse(localStorage.getItem('ff-dev')||'{}')}catch(e){}for(const k in d)if(!(k in cur)||String(d[k]).startsWith('2|'))cur[k]=d[k];DEVC=cur;lsPut('ff-dev',JSON.stringify(cur))} // merged: two pulls can run at once
+// when each token was created (its first transaction's time), from the same lookup: token age at the wallet's buy
+let AGEC=null;
+function ageGet(){if(!AGEC){try{AGEC=JSON.parse(localStorage.getItem('ff-age')||'{}')}catch(e){AGEC={}}}return AGEC}
+function ageSave(a){let cur={};try{cur=JSON.parse(localStorage.getItem('ff-age')||'{}')}catch(e){}Object.assign(cur,a);AGEC=cur;lsPut('ff-age',JSON.stringify(cur))}
 const isDev=(tok,wallet)=>{if(!wallet)return false;const s=devGet()[tok];return !!s&&s.replace(/^2\|/,'').split(',').includes(wallet)};
 async function devLookup(mints,key,onp){
-  const d={...devGet()},need=mints.filter(m=>!(m in d)||!String(d[m]).startsWith('2|'));let i=0,pages=0; // '2|': looked up with the wider check below
+  const d={...devGet()},ages={},ag=ageGet(),need=mints.filter(m=>!(m in d)||!String(d[m]).startsWith('2|')||!(m in ag));let i=0,pages=0; // '2|': looked up with the wider check below
   if(!need.length)return 0;onp&&onp(`Checking who created ${need.length} token${need.length>1?'s':''}`);
   const worker=async()=>{while(i<need.length){const m=need[i++];
     try{const j=await getJSON(RPC+key,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'getTransactionsForAddress',params:[m,{transactionDetails:'full',limit:1,sortOrder:'asc',encoding:'jsonParsed',maxSupportedTransactionVersion:1}]})});
       pages++;const t=j.result&&j.result.data&&j.result.data[0];
       // the creator: whoever signed the token's first transaction, plus whoever received tokens in it (the dev buy), which
       // also catches launches sent through a relayer or launch app where the dev isn't the one paying for the transaction
+      if(t&&t.blockTime)ages[m]=t.blockTime;
       if(t){const signers=t.transaction.message.accountKeys.map(k=>typeof k==='string'?{pubkey:k,signer:false}:k).filter(k=>k.signer&&k.pubkey!==m).map(k=>k.pubkey).slice(0,4);
         const pre={};for(const b of (t.meta&&t.meta.preTokenBalances)||[])if(b.mint===m)pre[b.owner]=+b.uiTokenAmount.amount;
         const buyers=((t.meta&&t.meta.postTokenBalances)||[]).filter(b=>b.mint===m&&b.owner&&+b.uiTokenAmount.amount>(pre[b.owner]||0)).map(b=>b.owner);
         d[m]='2|'+[...new Set([...signers,...buyers])].slice(0,8).join(',')}}
     catch(e){if(/key/i.test(e.message))throw e}}};
-  await Promise.all([worker(),worker()]);devSave(d);return pages;
+  await Promise.all([worker(),worker()]);devSave(d);if(Object.keys(ages).length)ageSave(ages);return pages;
 }
 
 /* ---------- which platform each token was bought on ----------
@@ -528,13 +536,13 @@ function convertPull(tx,meta,px){
     const ti=t.ti||[],to=t.to||[];
     // rounds: each time the wallet buys in, then sells (almost) everything, counts as one trade on this token
     const ev=[...t.b.map(x=>[x.t,1,x.sol,x.qty]),...ti.map(x=>[x.t,1,x.sol,x.qty]),...t.s.map(x=>[x.t,-1,x.sol,x.qty]),...to.map(x=>[x.t,-1,x.sol,x.qty])].sort((a,b)=>a[0]-b[0]||b[1]-a[1]);
-    const R=[];let cur=null,held=0,peak=0;const g=v=>+(+v).toPrecision(6);
+    const R=[];let cur=null,held=0,peak=0,dumpT=0;const g=v=>+(+v).toPrecision(6);
     for(const [ts,dir,sl,q] of ev){
       if(dir>0){if(!cur){cur=[ts,0,0,0,0];R.push(cur)}cur[1]+=sl;cur[3]+=q;held+=q;peak=Math.max(peak,held)}
-      else if(cur){cur[2]+=sl;cur[4]+=q;held-=q;if(held<=peak*0.05){cur=null;held=0;peak=0}}}
+      else if(cur){cur[2]+=sl;cur[4]+=q;held-=q;if(!dumpT&&cur===R[0]&&cur[4]>=cur[3]*0.5)dumpT=ts;if(held<=peak*0.05){cur=null;held=0;peak=0}}}
     rows.push([m,fb.t,S(t.b,'usd')+S(ti,'usd'),S(t.s,'usd')+S(to,'usd'),fb.pusd,fb.size,t.b.length,t.s.length,t.s.length?Math.max(...t.s.map(x=>x.t)):0,
       S(t.b,'qty'),S(t.s,'qty'),t.last,S(t.b,'sol')+S(ti,'sol'),S(t.s,'sol')+S(to,'sol'),0,S(t.s,'val'),mt[1],ti.length,to.length,S(ti,'usd'),S(to,'usd'),
-      t.pool||null,fb.p,S(t.s,'valSol'),S(ti,'qty'),S(to,'qty'),R.map(r=>r.map(g)),t.ep||t.pool||null]);
+      t.pool||null,fb.p,S(t.s,'valSol'),S(ti,'qty'),S(to,'qty'),R.map(r=>r.map(g)),t.ep||t.pool||null,dumpT||0]);
   }
   const sorted=px.map(p=>p[1]).sort((a,b)=>a-b);
   return {raw:rows,names,px:sorted.length?sorted[sorted.length>>1]:fallback};

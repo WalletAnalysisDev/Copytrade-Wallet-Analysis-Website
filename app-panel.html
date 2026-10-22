@@ -51,6 +51,7 @@ html,body{min-height:100%}
     </label>
     <label class="chk"><input type="checkbox" id="openloss" checked> Count never-sold tokens as losses <span class="hint">(only when today's price isn't available; otherwise they're valued at today's price)</span></label>
     <label class="chk"><input type="checkbox" id="nodev"> Leave out tokens this wallet created <span class="tag devt">DEV</span></label>
+    <label class="chk"><input type="checkbox" id="agef" checked> Suggest a token age filter <span class="hint">(min / max time since the token was created, when it clearly does better)</span></label>
     <label class="chk"><input type="checkbox" id="autocheck"> Check round-trips &amp; entry spikes automatically <span class="hint">(about 20 Helius credits per token)</span></label>
     <label class="chk"><input type="checkbox" id="chkall" checked> Check spikes &amp; round-trips on all analyzed tokens <span class="hint">(not just the ones in filters, so every token can get a label on GMGN; the score still only uses tokens in filters)</span></label>
     <label class="chk"><input type="checkbox" id="gmgn" checked> Show Wallet Score on GMGN pages <span class="hint">(score, filters and token tags on wallet pages)</span></label>
@@ -287,7 +288,7 @@ html,body{min-height:100%}
   </section>
 </div>
 
-<script>window.WS_WEB_VERSION="1.24.0"</script>
+<script>window.WS_WEB_VERSION="1.30.1"</script>
 <script src="app-shim.js"></script>
 <script src="engine.js"></script>
 <script src="panel.js"></script>
