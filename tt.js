@@ -189,7 +189,10 @@ function ttRender(){
 $('ttlist').addEventListener('click',e=>{const o=e.target.closest('[data-open]'),b=e.target.closest('.scb');
   if(o){const w=o.dataset.open;showView('wallet');$('addr').value=w;score(w,!!histIndex()[w])}
   if(b&&!TT.running)ttBatch([b.dataset.w])});
-function ttScoreLeft(auto){if(TT.res&&!TT.running){const l=ttView(TT.res).list.map(({w})=>w).filter(w=>!ttScoreGet(w.addr)).map(w=>w.addr);if(l.length)ttBatch(l,{rs:auto===true?$('ttautors').checked:true})}}
+function ttScoreLeft(auto){if(TT.res&&!TT.running){const l=ttView(TT.res).list.map(({w})=>w).filter(w=>!ttScoreGet(w.addr)).map(w=>w.addr),rs=auto===true?$('ttautors').checked:true;
+  // wallets scored in an earlier search were skipped here, so they never got the check: with "Include round-trips & spikes" on, check them too
+  const after=()=>{if(auto===true&&rs&&!TT.stop&&ttRsTodo().length)ttRsAll()};
+  if(l.length)ttBatch(l,{rs,auto:auto===true}).then(after);else after()}}
 /* "Check spikes & round-trips": the check alone, on wallets already scored (at or above "only if score ≥") that haven't had it.
    Uses each wallet's saved trades, so only the check itself costs credits. */
 function ttRsTodo(){if(!TT.res)return [];const min=+SET.rsmin||0;
@@ -218,7 +221,7 @@ function ttSaveScore(w,res,rsc){const s=res.raw.length?scoreOf(res.raw,res.px,w,
 async function ttBatch(list,opt={}){
   const key=getKey();if(!key){ttStatus('Add your Helius key in Settings first.',true);return}
   TT.running=true;TT.stop=false;$('ttstop').hidden=false;$('ttstop').textContent='Stop';$('ttkeep').hidden=MODE!=='popup';
-  let done=0,credits=0,next=0,fatal=null;const failed=[];const o=opts(),t0=Date.now(),rsN=opt.rs===false?0:(+$('ttrs').value||0),pulled={};TTC.run=0;TTC.running=true;ttCredShow();
+  let done=0,credits=0,next=0,fatal=null;const failed=[];const o=opts(),t0=Date.now(),rsN=opt.rs===false?0:(+$('ttrs').value||(opt.auto&&opt.rs?25:0)),pulled={};TTC.run=0;TTC.running=true;ttCredShow();
   const save=(w,res,rsc)=>ttSaveScore(w,res,rsc);
   const label=()=>{const per=done?(Date.now()-t0)/done:4000;$('ttscore').textContent=`Scoring ${Math.min(done+1,list.length)} of ${list.length} · about ${Math.max(1,Math.round((list.length-done)*per/1000/2))}s left`;$('ttscore').disabled=true};
   // pass 1: score every wallet, two at a time (fast: no round-trip checks yet)

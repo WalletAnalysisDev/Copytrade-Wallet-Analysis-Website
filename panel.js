@@ -28,7 +28,7 @@ $('upd').addEventListener('click',async()=>{
   chrome.runtime.reload()});
 updCheck();setInterval(updCheck,60000);
 window.addEventListener('focus',updCheck);document.addEventListener('visibilitychange',()=>{if(!document.hidden)updCheck()});
-const RULES_V=28; // scoring-code version: bump whenever adjustScore or the filter search changes, so saved scores get recomputed
+const RULES_V=29; // scoring-code version: bump whenever adjustScore or the filter search changes, so saved scores get recomputed
 const rulesV=()=>RULES_V+':'+scVer(); // also changes when you edit Custom scoring
 const DEF={agef:true,gmgn:true,chkall:true,lsauto:true,autotab:false,period:0,rsmin:0,lastn:50,minn:10,slip:0,openloss:true,autocheck:false,nodev:false,maxr:0,offplat:[],adj:true};
 let SET={...DEF};try{SET={...DEF,...JSON.parse(store.get('ws-set')||'{}')}}catch(e){}
@@ -289,7 +289,7 @@ function trimWeakEdges(best,U,o){
       Object.assign(f,nf);trims.push(`${r.label} ${d.name} (${Math.round(r.s.win*100)}% win, ${r.s.n} trades)`);return true};
     if(!(cut(rows[0],'lo')||cut(rows[rows.length-1],'hi')))break}
   // QuickSells Low MC still inside the filters: raise Min market cap to $5K to block them, if enough trades are left
-  {const list=U.filter(t=>inF(t,f)),qs=list.filter(isQS);
+  {const list=U.filter(t=>inF(t,f)),qs=list.filter(isQSLow);
     if(qs.length>=2&&f.lo<SC().qsMc){const nf={...f,lo:SC().qsMc},rest=U.filter(t=>inF(t,nf));
       if(rest.length>=o.minN&&summarize(rest,o).pnl>=summarize(list,o).pnl){Object.assign(f,nf);trims.push(`QuickSells Low MC: ${qs.length} token${qs.length>1?'s':''} sold within ${SC().qsSec}s under ${fm(SC().qsMc)} (counted as losses for a copier) → Min market cap ${fm(SC().qsMc)}`)}}}
   if(trims.length){const k=summarize(U.filter(t=>inF(t,f)),o);Object.assign(f,{n:k.n,win:k.win,pnl:k.pnl})}
@@ -350,7 +350,9 @@ function rerender(){if(!CUR)return;const A=analyze();CUR.A=A;
     (f?`<div class="kpi"><span class="k">All trades</span><span class="v ${cls(b.pnl)}">${sol(b.pnl)}</span></div><div class="kpi"><span class="k">All win rate</span><span class="v">${Math.round(b.win*100)}%</span></div>`:'');
   if(A.trims&&A.trims.length)$('kpis').innerHTML+=`<p class="tipline trimnote">Skips weak ranges: ${A.trims.map(esc).join(' · ')}.</p>`;
   if(f&&f.ageGain){const a=f.ageGain.from,b=f.ageGain.to;$('kpis').innerHTML+=`<p class="tipline agenote"><span class="tag age">Token age</span> Only tokens ${f.alo?fmAge(f.alo)+' to '+fmAge(f.ahi):'under '+fmAge(f.ahi)} old when it bought${f.alo&&f.ahi===Infinity?'':''}: ${Math.round(a.win*100)}% → <b>${Math.round(b.win*100)}%</b> win, ${sol(a.pnl)} → <b class="${cls(b.pnl)}">${sol(b.pnl)}</b> (${a.n-b.n} trade${a.n-b.n>1?'s':''} left out).</p>`}
-  {const qs=A.U.filter(isQS),inside=A.best?qs.filter(t=>inF(t,A.best)):qs;
+  {const fast=A.U.filter(t=>isQS(t)&&!isQSLow(t)),fin=A.best?fast.filter(t=>inF(t,A.best)):fast;
+    if(fast.length)$('kpis').innerHTML+=`<p class="tipline qsnote"><span class="tag qs">QuickSell</span> ${fast.length} token${fast.length>1?'s were':' was'} sold within ${SC().qsAnySec}s of buying${fin.length?`, ${fin.length} of them inside these filters`:''}. Counted as losses: a copy bot can't sell that fast, so these don't count as wins and lower the score.</p>`}
+  {const qs=A.U.filter(isQSLow),inside=A.best?qs.filter(t=>inF(t,A.best)):qs;
     if(qs.length)$('kpis').innerHTML+=`<p class="tipline qsnote"><span class="tag qs">QuickSell Low MC</span> ${qs.length} token${qs.length>1?'s were':' was'} sold within ${SC().qsSec}s after buying under ${fm(SC().qsMc)}. Counted as losses: a copy bot buys later and can't sell that fast.${inside.length?` <b>Suggested: Min market cap ${fm(SC().qsMc)}</b> to block ${inside.length>1?'them':'it'}.`:A.best&&A.best.lo>=SC().qsMc?' Your Min market cap already blocks them.':''}</p>`}
   renderCmp(A);
   renderSZ(A);renderPL(A);renderRT(A);renderRE(A);renderToks(A);
@@ -567,7 +569,7 @@ function renderToks(A){
   const newerOut=VIEW==='kept'&&A.best&&show.length?list.filter(t=>t.t>show[0].t).length:0; // recent tokens hidden because they're outside the filters
   $('toks').innerHTML=show.length?show.map(t=>{const r=adjRet(t,o),inside=!A.best||inF(t,A.best),nm=NAMES[t.tok]||short(t.tok),full=(meta[t.tok]&&meta[t.tok][2])||'';
     const rt=rtOf(t,o),sp=spikeOf(t);
-    const tags=(rt!=null&&rt>=0.5?`<span class="tag rt" title="Was up ${pct(rt)} before it closed red">RT ${pct(rt)}</span>`:'')+(isQS(t)?`<span class="tag qs" title="Sold within ${SC().qsSec}s, bought under ${fm(SC().qsMc)} market cap: a copy bot would most likely lose here, so it counts as a loss">QuickSell Low MC</span>`:'')+(sp&&sp.rise>=0.15?`<span class="tag spk" title="Price jumped this much within one block of its buy">spike ${pct(sp.rise)}</span>`:'')+(t.rounds>1?`<span class="tag rnd" title="Bought in and sold out ${t.rounds} separate times${t.cut?'; only the first '+o.maxRounds+' counted':''}">${t.cut?o.maxRounds+'/':''}${t.rounds}×</span>`:'')+(t.dev?'<span class="tag devt" title="This wallet created this token (it signed the token\'s first transaction)">DEV</span>':'')+(cnt[tick(t)]>1?'<span class="tag dup" title="Another token here uses the same ticker">same ticker</span>':'');
+    const tags=(rt!=null&&rt>=0.5?`<span class="tag rt" title="Was up ${pct(rt)} before it closed red">RT ${pct(rt)}</span>`:'')+(isQS(t)?`<span class="tag qs" title="${isQSLow(t)?`Sold within ${SC().qsSec}s, bought under ${fm(SC().qsMc)} market cap`:`Sold within ${SC().qsAnySec}s of buying`}: a copy bot would most likely lose here, so it counts as a loss">${qsLabel(t)}</span>`:'')+(sp&&sp.rise>=0.15?`<span class="tag spk" title="Price jumped this much within one block of its buy">spike ${pct(sp.rise)}</span>`:'')+(t.rounds>1?`<span class="tag rnd" title="Bought in and sold out ${t.rounds} separate times${t.cut?'; only the first '+o.maxRounds+' counted':''}">${t.cut?o.maxRounds+'/':''}${t.rounds}×</span>`:'')+(t.dev?'<span class="tag devt" title="This wallet created this token (it signed the token\'s first transaction)">DEV</span>':'')+(cnt[tick(t)]>1?'<span class="tag dup" title="Another token here uses the same ticker">same ticker</span>':'');
     const qsIn=A.best&&inside&&isQS(t);
     return `<div class="tk${inside?'':' out'}${t.dev?' dev':''}${qsIn?' qsin':''}"${qsIn?` title="QuickSell inside the filters: profitable for the wallet, but a copy bot buys later and can't sell that fast, so it counts as a loss (${pct(SC().qsLoss/100)}) and not as a win"`:''}>
       <div style="min-width:0"><a class="nm gm" href="${esc(tokUrl(t.tok,CUR.wallet))}" target="_blank" rel="noopener" title="${esc((full?full+' · ':'')+t.tok)}">${esc(nm)}${tags}</a>
@@ -657,7 +659,7 @@ const SC_UI=[
   {id:'fast',t:'Fast flips',d:'Share of sold tokens held under a few seconds.',f:[['fastSec','Held under (sec)'],['fT1','At (% of tokens)'],['fP1','Points'],['fT2','At (%)'],['fP2','Points'],['fT3','At (%)'],['fP3','Points'],['fT4','At (%)'],['fP4','Points']]},
   {id:'short',t:'Short holds (score cap)',d:'Most tokens sold within this many seconds: a copier buys later and sells later, so a high win rate doesn\'t carry over. The score can\'t go above the cap, and no perfect 100.',f:[['shortSec','Sold within (sec)'],['shortShare','Share at least (%)'],['shortCap','Max score']]},
   {id:'flip',t:'Quick flipper',d:'Most tokens sold within seconds: a copier can\'t get those fills. Also blocks a perfect 100.',f:[['flipSec','Sold within (sec)'],['flipShare','Share at least (%)'],['flipPts','Points']]},
-  {id:'qs',t:'QuickSells Low MC',d:'Sold within seconds after buying at a low market cap: counted as a loss for the copier, and Min market cap is raised to block them.',f:[['qsSec','Sold within (sec)'],['qsMc','Market cap under ($)'],['qsLoss','Copier loss (%)']]},
+  {id:'qs',t:'QuickSells',d:'Sold within seconds after buying at a low market cap, or within a few seconds at any market cap: counted as a loss for the copier (never a win). Low-MC ones also raise Min market cap to block them.',f:[['qsSec','Low MC: sold within (sec)'],['qsMc','Low MC: market cap under ($)'],['qsAnySec','Any market cap: sold within (sec)'],['qsLoss','Copier loss (%)']]},
   {id:'overall',t:'Overall win rate',d:'Win rate over every analyzed trade, not just inside the filters. A perfect 100 also needs at least the set win rate here.',f:[['allLow','Under (%)'],['allLowPts','Points'],['allMid','Under (%)'],['allMidPts','Points'],['perfAll','Perfect 100 needs (%)']]},
   {id:'form',t:'Recent form (last 7 days)',d:'How its trades from the last 7 days did (inside the filters when there are 3+, otherwise all). A weak week also blocks a perfect 100.',f:[['recMinN','Min trades to judge'],['recLow','Under (% win)'],['recLowPts','Points'],['recMid','Under (% win)'],['recMidPts','Points'],['recNone','Filters fit none of them']]},
   {id:'perfect',t:'Perfect record',d:'Every trade profitable with at least this many trades scores 100; everyone else is capped.',f:[['perfectN','Trades needed'],['cap','Cap for the rest']]},
@@ -699,7 +701,7 @@ const gmStore=typeof chrome!=='undefined'&&chrome.storage&&chrome.storage.local;
 function gmSet(obj){if(!gmStore)return;try{chrome.storage.local.set(obj)}catch(e){}}
 // per-token labels for GMGN pages (In / Out of filter, DEV, Spike, RT, QuickSell): used by the full analysis and by Top traders / Automatic scores
 function gmTokensOf(trades,o,best){const tokens={};let devN=0;for(const t of recent(trades,{...o,noDev:false})){if(t.dev)devN++;const r=adjRet(t,o),sp=spikeOf(t),rt=rtOf(t,o);
-    tokens[t.tok]={r:r==null?null:Math.round(r*1000)/1000,out:!!(best&&!inF(t,best)),held:!!t.held,open:!!t.open,qs:isQS(t),sp:sp&&sp.rise>=0.15?Math.round(sp.rise*100):null,rt:rt!=null&&rt>=0.5?Math.round(rt*100):null,dev:!!t.dev}}
+    tokens[t.tok]={r:r==null?null:Math.round(r*1000)/1000,out:!!(best&&!inF(t,best)),held:!!t.held,open:!!t.open,qs:isQS(t)?(isQSLow(t)?1:2):0,sp:sp&&sp.rise>=0.15?Math.round(sp.rise*100):null,rt:rt!=null&&rt>=0.5?Math.round(rt*100):null,dev:!!t.dev}}
   return {tokens,devN}}
 const gmFilters=f=>f?{lo:f.lo,hi:f.hi===Infinity?null:f.hi,slo:f.slo,shi:f.shi===Infinity?null:f.shi,alo:f.alo!=null?f.alo:null,ahi:f.alo!=null&&f.ahi!==Infinity?f.ahi:null}:null;
 function gmPublish(A){if(!gmStore||!CUR)return;const o=A.o,[g,col]=gradeOf(A.best?A.score:null);

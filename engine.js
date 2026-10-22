@@ -45,7 +45,7 @@ const SC_DEF={perfectN:9,cap:99, few1:-25,few2:-15, winLow:35,winLowPts:-50,winM
   fastSec:10,fT1:10,fP1:-5,fT2:20,fP2:-10,fT3:35,fP3:-15,fT4:50,fP4:-20, flipSec:20,flipShare:50,flipPts:-40,
   g1:100,gP1:5,g2:300,gP2:10,g3:1000,gP3:15,gP4:20,redPts:-20,redLossPts:-30,allRedPts:-50,
   spikeRise:50,sMinChecked:4,sT1:50,sP1:-10,sT2:65,sP2:-15,sT3:80,sP3:-20,sMorePts:-5, rtPct:100,rtN1:2,rP1:3,rtN2:3,rP2:5,rtN3:5,rP3:8,
-  qsSec:15,qsMc:5000,qsLoss:-20, weakWin:35,
+  qsSec:15,qsMc:5000,qsLoss:-20,qsAnySec:5, weakWin:35,
   allLow:25,allLowPts:-20,allMid:40,allMidPts:-10,perfAll:40, recMinN:5,recLow:30,recLowPts:-30,recMid:45,recMidPts:-10,recNone:-15, shortSec:40,shortShare:50,shortCap:60, winMin:10,
   edgeN:10,edgeMin:2,edgeX1:3,edgePts1:10,edgeX2:5,edgeWinUp:10,edgePts2:20, winHi:50,winHiPts:15,winHiN:5, rescueN:5,rescueRed:-5,rescueAll:50};
 const SC_RULES=['perfect','few','win','act','hold','fast','flip','p7','spike','rt','qs','weak','overall','form','short','winmin','edge','winhi','rescue'];
@@ -61,7 +61,10 @@ function scVer(){const c=SC();return c.custom?'c'+JSON.stringify(c).split('').re
 /* QuickSells Low MC: sold within a few seconds of buying, entry at a low market cap. The wallet may book a profit,
    but a copy bot buys a block or two later at a higher price and can't sell that fast, so for the copier it's a loss. */
 // timed to when half the first buy-in was sold, so a token dumped in 2s with a few small sells trickling out later still counts
-const isQS=t=>{const c=SC(),h=t.dump!=null?t.dump:t.hold;return c.on.qs&&!t.open&&h!=null&&h*60<c.qsSec&&t.mcap>0&&t.mcap<c.qsMc};
+// QuickSell: sold within qsSec after buying under qsMc market cap, or within qsAnySec (5s) at any market cap. A copier can't sell that fast
+const isQSLow=t=>{const c=SC(),h=t.dump!=null?t.dump:t.hold;return c.on.qs&&!t.open&&h!=null&&h*60<c.qsSec&&t.mcap>0&&t.mcap<c.qsMc};
+const isQS=t=>{if(isQSLow(t))return true;const c=SC(),h=t.dump!=null?t.dump:t.hold;return c.on.qs&&!t.open&&h!=null&&c.qsAnySec>0&&h*60<c.qsAnySec};
+const qsLabel=t=>isQSLow(t)?'QuickSell Low MC':'QuickSell';
 function adjRet(t,o){if(t.open)return o.openLoss?-1:null;const r=(1+t.ret)/(1+o.slip)-1;return o.qsLow!==false&&isQS(t)?Math.min(r,SC().qsLoss/100):r}
 function summarize(list,o){let n=0,w=0,pnl=0,inv=0;for(const t of list){const r=adjRet(t,o);n++;if(isWin(r))w++;pnl+=r*t.buySol;inv+=t.buySol}
   return{n,win:n?w/n:0,pnl,inv,roi:inv?pnl/inv:0}}
