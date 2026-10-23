@@ -118,9 +118,25 @@ $('ttform').addEventListener('submit',async e=>{e.preventDefault();if(TT.running
     ttStatus(`${r.stopped?'Stopped early: showing traders from the trades read so far. ':'Done. '}${r.txs.toLocaleString()} transactions read · about ${r.credits} Helius credits.`+(r.done||r.stopped?'':` Stopped at your limit, so traders after ${new Date(r.last*1000).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})} aren't counted.`));
     ttRender();
   }catch(err){ttStatus(err.message,true)}
-  finally{TT.running=false;ttProg(false);$('ttgo').disabled=false;$('ttkeep').hidden=true;if(TT.res)ttRender()}
+  finally{TT.running=false;ttProg(false);$('ttgo').disabled=false;$('ttkeep').hidden=true;if(TT.res){ttRender();ttLinkHist().then(n=>{if(n)ttRender()}).catch(()=>{})}}
   if(TT.res&&TT.mint===mint&&$('ttauto').checked&&!TT.stop)ttScoreLeft(true); // auto-score everyone the search found
 });
+
+/* ---------- Multi-Wallet, second check (free): the saved trade histories of the scored wallets ----------
+   Two wallets that bought AND sold the same tokens within seconds of each other, on 3+ tokens and on a good share of
+   what they trade, are linked too. This catches pairs whose trades on the scanned token alone weren't enough. */
+async function ttLinkHist(){const R=TT.res;if(!R||typeof cacheGet!=='function')return 0;const V=ttView(R).list.map(({w})=>w),F={},SEC=20;
+  for(const w of V){let c=null;try{c=await cacheGet(w.addr)}catch(e){}if(!c||!c.tx||!c.tx.length)continue;const b={},sl={};
+    for(const r of c.tx)for(const m in r[3]){if(isBuyRow(r,m)){if(!b[m]||r[1]<b[m])b[m]=r[1]}else if(isSellRow(r,m)){if(!sl[m]||r[1]<sl[m])sl[m]=r[1]}}
+    const n=Object.keys(b).length;if(n>=3)F[w.addr]={b,sl,n}}
+  const ks=Object.keys(F),add={};let found=0;
+  for(let i=0;i<ks.length;i++)for(let j=i+1;j<ks.length;j++){const A=F[ks[i]],B=F[ks[j]];let same=0;
+    for(const m in A.b){const tb=B.b[m];if(tb==null||Math.abs(tb-A.b[m])>SEC)continue;const sa=A.sl[m],sb=B.sl[m];if(sa!=null&&sb!=null&&Math.abs(sa-sb)<=SEC)same++}
+    if(same>=3&&same/Math.min(A.n,B.n)>=0.3){(add[ks[i]]=add[ks[i]]||new Set()).add(ks[j]);(add[ks[j]]=add[ks[j]]||new Set()).add(ks[i])}}
+  for(const t of R.traders){const x=add[t.addr];if(!x)continue;const cur=new Set((t.multi&&t.multi.with)||[]),before=cur.size;for(const a of x)cur.add(a);
+    if(cur.size>before){found+=cur.size-before;t.multi={...(t.multi||{}),n:cur.size+1,with:[...cur].slice(0,12),hist:true}}}
+  if(found){try{localStorage.setItem('tt-last',JSON.stringify({res:R,mint:TT.mint,name:TT.name}))}catch(e){}}
+  return Math.round(found/2)}
 
 /* ---------- several tokens at once: one merged list of every trader, tagged with how many of the tokens it traded ---------- */
 async function ttMeta(mints,key){const meta=metaAll(),need=mints.filter(m=>!meta[m]);
@@ -150,7 +166,7 @@ async function ttMulti(mints,key){
     const bad=per.filter(p=>p.err);
     ttStatus(`${TT.stop?'Stopped. ':''}Done. ${per.length-bad.length} tokens · ${txs.toLocaleString()} transactions read · ${tr.length.toLocaleString()} traders · about ${credits.toLocaleString()} Helius credits.`+(bad.length?` Couldn't read: ${bad.map(p=>p.sym).join(', ')}.`:'')+(TTR.autoOff?' Auto-check tokens I open on GMGN was turned off so this scan wasn\'t interrupted.':''));TTR.autoOff=false;
   }catch(err){ttStatus(err.message,true)}
-  finally{TT.running=false;ttProg(false);$('ttgo').disabled=false;$('ttkeep').hidden=true;if(TT.res)ttRender()}
+  finally{TT.running=false;ttProg(false);$('ttgo').disabled=false;$('ttkeep').hidden=true;if(TT.res){ttRender();ttLinkHist().then(n=>{if(n)ttRender()}).catch(()=>{})}}
   if(TT.res&&TT.mint===mints.join(',')&&$('ttauto').checked&&!TT.stop)ttScoreLeft(true);
 }
 
@@ -187,7 +203,7 @@ function ttRender(){
       :`<span class="sc" data-open="${esc(w.addr)}" role="button" tabindex="0" style="color:${scCol(s.score)};background:color-mix(in srgb,${scCol(s.score)} 14%,transparent)" title="Open the full analysis · ${s.reliable?`Wins ${Math.round((s.win??s.score)*s.n/100)} of ${s.n} trades in its best filters`:`No filter with enough trades; ${s.n} trades overall`}${s.parts&&s.parts.length?` · win rate ${s.win}${s.parts.map(([v,l])=>` ${v>0?'+':'−'}${Math.abs(v)} ${l}`).join(',')}`:''}">${s.score}${s.reliable?'':'*'}</span>`;
     const tier=s&&s.spam?' spam':w.multi?' multi':s&&s.score!=null?(s.score>=100?' gold':s.score>=90?' great':''):'';
     const mc=w.multi?mcol(w.addr):null;
-    const mw=w.multi?`<span class="mwt"${mc?` style="--mc:${mc.hex}"`:''} title="${mc?`${mc.name} group · `:''}Trades in the same block as ${w.multi.n-1} other wallet${w.multi.n>2?'s':''} on 60%+ of its buys and sells: ${w.multi.with.map(a=>short(a)).join(', ')}">Multi-Wallet ×${w.multi.n}</span>`:'';
+    const mw=w.multi?`<span class="mwt"${mc?` style="--mc:${mc.hex}"`:''} title="${mc?`${mc.name} group · `:''}${w.multi.hist?'Buys and sells the same tokens within seconds (from their trade histories) and/or trades within a block or two of':'Trades within a block or two of'} ${w.multi.n-1} other wallet${w.multi.n>2?'s':''} on 60%+ of its buys and sells: ${w.multi.with.map(a=>short(a)).join(', ')}">Multi-Wallet ×${w.multi.n}</span>`:'';
     const won=w.hits?w.hits.filter(h=>h.pnl>0).length:0;
     const tk=w.hits?`<span class="tkt${won>=2?' rep':''}" title="${esc(w.hits.map(h=>`${h.sym}: ${sol(h.pnl)}${h.roi!=null?' ('+pct(h.roi)+')':''}`).join(' · '))}">${won} of ${w.toks} tokens</span>`:'';
     return `<div class="ttr${ok?'':' low'}${tier}" data-w="${esc(w.addr)}"${mc&&tier===' multi'?` style="--mc:${mc.hex}"`:''}><span class="rk">${i+1}</span>
@@ -233,7 +249,7 @@ try{$('ttautors').checked=localStorage.getItem('tt-autors')==='1'}catch(e){}
 $('ttautors').addEventListener('change',()=>{try{localStorage.setItem('tt-autors',$('ttautors').checked?'1':'0')}catch(e){}});
 try{$('ttfast').checked=localStorage.getItem('tt-fast')==='1'}catch(e){}
 $('ttfast').addEventListener('change',()=>{try{localStorage.setItem('tt-fast',$('ttfast').checked?'1':'0')}catch(e){}});
-const ttWorkers=()=>$('ttfast').checked?3:2;
+const ttWorkers=()=>Math.min(8,($('ttfast').checked?3:2)*(typeof hkLanes==='function'?hkLanes():1)); // more keys used at once: more wallets at once
 $('ttscore').addEventListener('click',()=>ttScoreLeft(false));
 $('ttstop').addEventListener('click',()=>{TT.stop=true;$('ttstop').textContent='Stopping…'});
 
@@ -272,6 +288,7 @@ async function ttBatch(list,opt={}){
   if(fatal)ttStatus(fatal.message,true);
   TT.running=false;$('ttstop').hidden=true;$('ttkeep').hidden=true;
   TTC.running=false;ttCredShow();
+  ttLinkHist().then(n=>{if(n){ttRender();ttStatus($('ttstatus').textContent+` · found ${n} more Multi-Wallet link${n>1?'s':''} from their trade histories`)}}).catch(()=>{});
   const okN=done-retryLeft.length;
   if(!fatal)ttStatus(`${TT.stop?'Stopped. ':''}Scored ${okN} wallet${okN===1?'':'s'}${retryLeft.length?` · ${retryLeft.length} couldn't be reached (Helius busy): press Score all again for those`:''}${todo.length?` · checked round-trips & spikes on ${todo.length}`:''} · about ${credits.toLocaleString()} Helius credits.`);
   ttRender();

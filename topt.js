@@ -46,12 +46,17 @@ async function topTraders(mint,key,maxPages,onp,stopF){
     const j=await getJSON(RPC+key,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'getMultipleAccounts',params:[part,{encoding:'base64',dataSlice:{offset:0,length:0}}]})});
     ((j.result&&j.result.value)||[]).forEach((v,k)=>{if(!v||v.owner===SYS)keep.add(part[k])})}
   list=cand.filter(w=>keep.has(w.addr)&&!(typeof PLAT_AUTH!=='undefined'&&PLAT_AUTH[w.addr]));
-  // multi-wallet users: two wallets count as the same person when 60%+ of BOTH wallets' buys and sells land in the same block, same side
-  const idx=new Map();for(const w of W.values()){if((seen.get(w.addr)||0)>=busy)continue;for(const e of new Set(w.ev)){let a=idx.get(e);if(!a){a=[];idx.set(e,a)}a.push(w)}}
-  for(const w of list){const mine=new Set(w.ev),cnt=new Map();
-    for(const e of mine)for(const o of idx.get(e)||[])if(o.addr!==w.addr)cnt.set(o,(cnt.get(o)||0)+1);
-    const twins=[...cnt].filter(([o,c])=>c>=2&&c/Math.max(mine.size,o.evn||(o.evn=new Set(o.ev).size))>=0.6).map(([o])=>o.addr);
+  // multi-wallet users: two wallets count as the same person when 60%+ of BOTH wallets' buys and sells land within a
+  // block or two of each other, same side (one person's wallets rarely land in the exact same block, and may split a sell
+  // into a different number of transactions). Needs at least one matching buy and 2+ matching trades in all.
+  const NEAR=3,idx=new Map(),evOf=w=>{const s=new Set();for(const e of new Set(w.ev)){const n=parseInt(e,10),sd=e.slice(-1);if(isFinite(n))s.add(sd+n)}return s};
+  for(const w of W.values()){if((seen.get(w.addr)||0)>=busy)continue;w.evs=evOf(w);for(const e of w.evs){let a=idx.get(e);if(!a){a=[];idx.set(e,a)}a.push(w)}}
+  for(const w of list){const mine=w.evs||evOf(w),cnt=new Map(),buy=new Set();
+    for(const e of mine){const sd=e[0],n=+e.slice(1),hit=new Set();
+      for(let d=-NEAR;d<=NEAR;d++)for(const o of idx.get(sd+(n+d))||[])if(o.addr!==w.addr&&!hit.has(o)){hit.add(o);cnt.set(o,(cnt.get(o)||0)+1);if(sd==='b')buy.add(o)}}
+    const twins=[...cnt].filter(([o,c])=>c>=2&&buy.has(o)&&c/Math.max(mine.size,(o.evs||evOf(o)).size)>=0.6).map(([o])=>o.addr);
     if(twins.length)w.multi={n:twins.length+1,with:twins.slice(0,12)}}
+  for(const w of W.values())delete w.evs;
   for(const w of W.values())delete w.ev;for(const w of list)delete w.ev;
   return {traders:list,pages,txs,done,first,last,fees,stopped,credits:pages*10+Math.ceil(ids.length/100)};
 }

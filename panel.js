@@ -28,7 +28,7 @@ $('upd').addEventListener('click',async()=>{
   chrome.runtime.reload()});
 updCheck();setInterval(updCheck,60000);
 window.addEventListener('focus',updCheck);document.addEventListener('visibilitychange',()=>{if(!document.hidden)updCheck()});
-const RULES_V=41; // scoring-code version: bump whenever adjustScore or the filter search changes, so saved scores get recomputed
+const RULES_V=43; // scoring-code version: bump whenever adjustScore or the filter search changes, so saved scores get recomputed
 const rulesV=()=>RULES_V+':'+scVer(); // also changes when you edit Custom scoring
 const DEF={maxtf:true,gapd:14,agef:true,gmgn:true,chkall:true,lsauto:true,autotab:false,period:0,rsmin:0,lastn:50,minn:10,slip:0,openloss:true,autocheck:false,nodev:false,maxr:0,offplat:[],adj:true};
 let SET={...DEF};try{SET={...DEF,...JSON.parse(store.get('ws-set')||'{}')}}catch(e){}
@@ -43,25 +43,31 @@ $('lastn').value=SET.lastn;$('minn').value=SET.minn;$('slip').value=SET.slip;$('
 const fmtK=n=>n>=1e6?(+(n/1e6).toFixed(2))+'M':n>=1e3?(+(n/1e3).toFixed(n>=1e5?0:1))+'K':String(Math.round(n));
 const ordD=d=>d+(d>=11&&d<=13?'th':['th','st','nd','rd'][d%10]||'th');
 let hkAdding=false;
-function hkRender(){
+function hkSpreadUI(){const r=$('hkspreadrow');if(!r)return;let n=0;try{n=hkLoad().length}catch(e){}r.hidden=n<2;$('hkspread').checked=hkSpread()}
+$('hkspread').addEventListener('change',()=>{try{localStorage.setItem('ff-hk-spread',$('hkspread').checked?'1':'0')}catch(e){}note($('hkspread').checked?'Using all your keys at once.':'Using one key at a time.')});
+function hkRender(){hkSpreadUI();
   const el=$('hklist');if(!el)return;const l=hkLoad(),act=hkActive(),editing=document.activeElement&&el.contains(document.activeElement);if(editing)return;
   const rows=l.map((e,i)=>{const lim=e.limit||HK_LIMIT,u=e.used||0,p=Math.min(100,u/lim*100),st=e.out==='limit'?['out','Limit reached']:e.out==='rejected'?['out','Rejected']:e.k===act?['on','In use']:['idle','Standby'];
     return `<div class="hk ${st[0]}" data-i="${i}">
       <div class="hktop"><input type="password" class="hkkey" value="${esc(e.k)}" autocomplete="off" spellcheck="false" aria-label="Helius key ${i+1}"><span class="hkst">${st[1]}</span><button type="button" class="icon hkdel" title="Remove this key" aria-label="Remove key ${i+1}">×</button></div>
       <div class="hkbar"><i style="width:${p.toFixed(1)}%"></i></div>
-      <div class="hkmeta"><span><b>${fmtK(u)}</b> of ${fmtK(lim)} credits used</span><span>resets on the <select class="hkday" aria-label="Reset day">${[...Array(28)].map((_,d)=>`<option value="${d+1}"${(e.reset||1)===d+1?' selected':''}>${ordD(d+1)}</option>`).join('')}</select> <button type="button" class="linkbtn hkzero" title="Set this key's count back to 0 (for example after checking your Helius dashboard)">reset</button></span></div></div>`});
+      <div class="hkmeta"><span><b>${fmtK(u)}</b> of ${fmtK(lim)} credits used</span><span>resets on the <select class="hkday" aria-label="Reset day">${[...Array(28)].map((_,d)=>`<option value="${d+1}"${(e.reset||1)===d+1?' selected':''}>${ordD(d+1)}</option>`).join('')}</select> <button type="button" class="linkbtn hkzero" title="Set this key's count back to 0 (for example after checking your Helius dashboard)">reset</button> · <button type="button" class="linkbtn hkset" title="Type the credits used shown on your Helius dashboard">set</button></span></div>
+      <div class="hkseted" hidden><input type="number" min="0" step="1000" class="hkusedin" placeholder="Credits used on your Helius dashboard" aria-label="Credits used"><button type="button" class="linkbtn hksetok">Save</button></div></div>`});
   if(!l.length||hkAdding)rows.push(`<div class="hk new"><div class="hktop"><input type="password" class="hkkey" data-new="1" placeholder="Paste a Helius key or the full Helius URL" autocomplete="off" spellcheck="false" aria-label="New Helius key"></div></div>`);
   el.innerHTML=rows.join('');
 }
-$('hklist').addEventListener('change',e=>{const row=e.target.closest('.hk');if(!row)return;const l=hkLoad();
+$('hklist').addEventListener('change',e=>{const row=e.target.closest('.hk');if(!row||e.target.classList.contains('hkusedin'))return;const l=hkLoad();
   if(e.target.classList.contains('hkkey')){const k=cleanKey(e.target.value);
     if(e.target.dataset.new){if(k&&!l.some(x=>x.k===k)){l.push({k,used:0,limit:HK_LIMIT,reset:new Date().getDate(),cyc:hkCycle(new Date().getDate())});note('Key added.')}hkAdding=false}
     else{const i=+row.dataset.i;if(!k){l.splice(i,1);note('Key removed.')}else if(k!==l[i].k){l[i]={...l[i],k,used:0,out:null};note('Key replaced.')}}}
   else if(e.target.classList.contains('hkday')){const i=+row.dataset.i;l[i].reset=+e.target.value;l[i].cyc=hkCycle(l[i].reset)}
   hkSave(l);e.target.blur();hkRender()});
+$('hklist').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.classList.contains('hkusedin')){e.preventDefault();const b=e.target.closest('.hk').querySelector('.hksetok');if(b)b.click()}});
 $('hklist').addEventListener('click',e=>{const row=e.target.closest('.hk');if(!row||row.classList.contains('new'))return;const i=+row.dataset.i,l=hkLoad();
   if(e.target.closest('.hkdel')){l.splice(i,1);hkSave(l);hkRender();note('Key removed.')}
-  else if(e.target.closest('.hkzero')){l[i].used=0;l[i].out=null;hkSave(l);hkRender();note('Count reset to 0.')}});
+  else if(e.target.closest('.hkzero')){l[i].used=0;l[i].out=null;hkSave(l);hkRender();note('Count reset to 0.')}
+  else if(e.target.closest('.hkset')){const b=row.querySelector('.hkseted');b.hidden=!b.hidden;if(!b.hidden){const inp=b.querySelector('input');inp.value=l[i].used||0;inp.focus();inp.select()}}
+  else if(e.target.closest('.hksetok')){const v=Math.max(0,Math.round(+row.querySelector('.hkusedin').value||0));l[i].used=v;l[i].out=v>=(l[i].limit||HK_LIMIT)?'limit':(l[i].out==='limit'?null:l[i].out);hkSave(l);document.activeElement&&document.activeElement.blur();hkRender();note('Credits used set to '+fmtK(v)+'.')}});
 $('hkadd').addEventListener('click',()=>{hkAdding=true;hkRender();const n=document.querySelector('.hkkey[data-new]');if(n)n.focus()});
 hkSave(hkLoad());setTimeout(hkRender,0);setInterval(hkRender,5000); // after the rest of this file has loaded (hkRender uses helpers defined further down)
 $('maxr').addEventListener('change',()=>{SET.maxr=+$('maxr').value;saveSet();rerender()});
@@ -441,8 +447,26 @@ function renderCmp(A){
   $('cmp').innerHTML=`<div class="cmph"><span></span><span>With filters</span>${wd?'<span class="wdh">Wider</span>':''}<span>All trades</span></div>`+rows.map(([k,x,y,fmt,hi])=>`<div class="cmpr"><span class="k">${k}</span>
     <b class="${hi==null?'':better(x,y,hi).trim()}">${esc(fmt(x,f))}</b>${wd?`<b class="wd ${hi==null?'':better(wd[wv[k]],x,hi).trim()}">${esc(fmt(wd[wv[k]],wd))}</b>`:''}<b>${esc(fmt(y,a))}</b></div>`).join('')+
     `<p class="tipline">${f.pnl>a.pnl?`The filters keep <b>${f.n}</b> of ${a.n} trades and add <b class="pos">${sol(f.pnl-a.pnl)}</b> by skipping the rest.`:`Copying every trade would have made <b class="${cls(a.pnl-f.pnl)}">${sol(a.pnl-f.pnl)}</b> more than the filters.`}</p>`+(wd?`<p class="tipline wdline">Wider = <b>${esc(bw.label)}</b>. A preview only: the score and recommended filters stay the same.</p>`:'')+(bw?bw.html:'');
+  {const br=pnlBreak(A);if(br)$('cmp').insertAdjacentHTML('beforeend',br)}
   $('cmp').querySelectorAll('.widebtn').forEach(b=>b.addEventListener('click',()=>{CUR.wideOn=!CUR.wideOn;renderCmp(CUR.A)}));
 }
+/* where the All trades profit comes from: the wallet's own result, then each of your settings that changes it for a copier.
+   Explains why it can differ a lot from GMGN's realized profit (GMGN shows the wallet's own trades as they happened). */
+function pnlBreak(A){const o=A.o,U=A.U;if(!U.length)return '';const qsL=SC().qsLoss/100;
+  let own=0,slip=0,qs=0,open=0,nQs=0,nOpen=0;
+  for(const t of U){if(t.open){if(o.openLoss){open-=t.buySol;nOpen++}continue}
+    const r=t.ret,r1=(1+r)/(1+o.slip)-1;own+=r*t.buySol;slip+=(r1-r)*t.buySol;
+    if(o.qsLow!==false&&isQS(t)){const r2=Math.min(r1,qsL);if(r2<r1){qs+=(r2-r1)*t.buySol;nQs++}}}
+  // copying only the first K buys per token: compare with copying every buy on the same tokens
+  let kd=0,kN=0;if(o.maxRounds>0){const toks=new Set(U.map(t=>t.tok+'|'+t.t)),full=hydrate(CUR.raw,CUR.px,{...o,maxRounds:0}).filter(t=>toks.has(t.tok+'|'+t.t)&&!t.open);
+    const fo=full.reduce((x,t)=>x+t.ret*t.buySol,0);kd=own-fo;own=fo;kN=U.filter(t=>t.cut).length}
+  const parts=[[own,'the wallet\'s own trades (like GMGN, over these '+U.length+' tokens)']];
+  if(Math.abs(kd)>=0.01)parts.push([kd,`copying only the first ${o.maxRounds} buy${o.maxRounds>1?'s':''} per token (${kN} token${kN===1?'':'s'} bought more often)`]);
+  if(Math.abs(qs)>=0.01)parts.push([qs,`${nQs} QuickSell${nQs>1?'s':''} counted as ${SC().qsLoss}% (sold too fast for a copy bot)`]);
+  if(Math.abs(slip)>=0.01)parts.push([slip,`fill gap ${Math.round(o.slip*100)}% on every trade`]);
+  if(Math.abs(open)>=0.01)parts.push([open,`${nOpen} never-sold token${nOpen>1?'s':''} counted as losses`]);
+  if(parts.length<2)return '';
+  return `<details class="pnlbr"><summary>Why All trades shows <b class="${cls(A.base.pnl)}">${sol(A.base.pnl)}</b></summary><div class="pnlrows">${parts.map(([v,l])=>`<div><span>${esc(l)}</span><b class="${cls(v)}">${sol(v)}</b></div>`).join('')}<div class="tot"><span>All trades, as a copier</span><b class="${cls(A.base.pnl)}">${sol(A.base.pnl)}</b></div></div><p class="hint">GMGN's number is the wallet's own profit over its own time range (often 7 or 30 days), so it can differ from the tokens analyzed here. Change these in Settings.</p></details>`}
 
 /* ---------- buy size & market cap: win rate for the sizes and entries this wallet actually uses ---------- */
 const niceSol=v=>v<=0?0:v<1?Math.round(v*20)/20:v<5?Math.round(v*10)/10:Math.round(v*2)/2;
@@ -625,13 +649,13 @@ function renderToks(A){
   const newerOut=VIEW==='kept'&&A.best&&show.length?list.filter(t=>t.t>show[0].t).length:0; // recent tokens hidden because they're outside the filters
   $('toks').innerHTML=show.length?show.map(t=>{const r=adjRet(t,o),inside=!A.best||inF(t,A.best),nm=NAMES[t.tok]||short(t.tok),full=(meta[t.tok]&&meta[t.tok][2])||'';
     const rt=rtOf(t,o),sp=spikeOf(t);
-    const tags=(rt!=null&&rt>=0.5?`<span class="tag rt" title="Was up ${pct(rt)} before it closed red">RT ${pct(rt)}</span>`:'')+(isQS(t)?`<span class="tag qs" title="${isQSLow(t)?`Sold within ${SC().qsSec}s, bought under ${fm(SC().qsMc)} market cap`:`Sold within ${SC().qsAnySec}s of buying`}: a copy bot would most likely lose here, so it counts as a loss">${qsLabel(t)}</span>`:'')+(sp&&sp.rise>=0.15?`<span class="tag spk" title="Price jumped this much within one block of its buy">spike ${pct(sp.rise)}</span>`:'')+(t.rounds>1?`<span class="tag rnd" title="Bought in and sold out ${t.rounds} separate times${t.cut?'; only the first '+o.maxRounds+' counted':''}">${t.cut?o.maxRounds+'/':''}${t.rounds}×</span>`:'')+(t.dev?'<span class="tag devt" title="This wallet created this token (it signed the token\'s first transaction)">DEV</span>':'')+(cnt[tick(t)]>1?'<span class="tag dup" title="Another token here uses the same ticker">same ticker</span>':'');
+    const tags=(t.early?`<span class="tag" style="background:rgba(139,139,150,.16);color:#a0a0aa" title="It sold more of this token than it bought in the trades loaded: its first buys were earlier than the history read. Only the sells of the tokens it bought here are counted">older buys not loaded</span>`:'')+(rt!=null&&rt>=0.5?`<span class="tag rt" title="Was up ${pct(rt)} before it closed red">RT ${pct(rt)}</span>`:'')+(isQS(t)?`<span class="tag qs" title="${isQSLow(t)?`Sold within ${SC().qsSec}s, bought under ${fm(SC().qsMc)} market cap`:`Sold within ${SC().qsAnySec}s of buying`}: a copy bot would most likely lose here, so it counts as a loss">${qsLabel(t)}</span>`:'')+(sp&&sp.rise>=0.15?`<span class="tag spk" title="Price jumped this much within one block of its buy">spike ${pct(sp.rise)}</span>`:'')+(t.rounds>1?`<span class="tag rnd" title="Bought in and sold out ${t.rounds} separate times${t.cut?'; only the first '+o.maxRounds+' counted':''}">${t.cut?o.maxRounds+'/':''}${t.rounds}×</span>`:'')+(t.dev?'<span class="tag devt" title="This wallet created this token (it signed the token\'s first transaction)">DEV</span>':'')+(cnt[tick(t)]>1?'<span class="tag dup" title="Another token here uses the same ticker">same ticker</span>':'');
     const qsIn=A.best&&inside&&isQS(t);
     return `<div class="tk${inside?'':' out'}${t.dev?' dev':''}${qsIn?' qsin':''}"${qsIn?` title="QuickSell inside the filters: profitable for the wallet, but a copy bot buys later and can't sell that fast, so it counts as a loss (${pct(SC().qsLoss/100)}) and not as a win"`:''}>
       <div style="min-width:0"><a class="nm gm" href="${esc(tokUrl(t.tok,CUR.wallet))}" target="_blank" rel="noopener" title="${esc((full?full+' · ':'')+t.tok)}">${esc(nm)}${tags}</a>
         <div class="sub">${ago(t.t)} ago · ${(+t.firstSol.toFixed(2))} SOL${t.age!=null?' · token '+fmAge(t.age)+' old':''}${t.platD?' · '+esc(t.platD):''}${full&&cnt[tick(t)]>1?' · '+esc(full):''}</div></div>
       <div class="mc">${fm(t.mcap)}<div class="sub">MC</div></div>
-      <div class="res ${r==null?'':r>0&&!isWin(r)?'amb':cls(r)}" ${r!=null&&r>0&&!isWin(r)?`title="Under +${SC().winMin}%: counted as a loss for the win rate"`:''}>${r==null?'<span class="hint">open</span>':t.open?'<span class="neg">unsold</span>':pct(r)+(t.held?`<div class="sub" title="${Math.round(t.held.frac*100)}% of the position is still held, valued at today's price">held</div>`:'')}</div></div>`}).join('')
+      <div class="res ${r==null?'':r>0&&!isWin(r)?'amb':cls(r)}" ${r!=null&&r>0&&!isWin(r)?`title="Under +${SC().winMin}%: counted as a loss for the win rate"`:''}>${r==null?'<span class="hint">open</span>':t.open?'<span class="neg">unsold</span>':pct(r)+(t.held?(t.held.val===0?`<div class="sub" title="${Math.round(t.held.frac*100)}% of the position was never sold and has no price anywhere (usually a dead token): counted as worth nothing, like GMGN's unrealized loss">stuck</div>`:`<div class="sub" title="${Math.round(t.held.frac*100)}% of the position is still held, valued at today's price">held</div>`):'')}</div></div>`}).join('')
     :'<p class="empty">No tokens inside these filters.</p>';
   if(newerOut)$('toks').insertAdjacentHTML('afterbegin',`<button type="button" class="suggest newerout" data-v="all">${newerOut} newer token${newerOut>1?'s are':' is'} outside these filters (latest ${esc(ago(list[0].t))} ago). Show all</button>`);
 }

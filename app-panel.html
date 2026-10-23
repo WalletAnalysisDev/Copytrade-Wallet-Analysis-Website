@@ -36,6 +36,7 @@ html,body{min-height:100%}
     <div class="fld"><span class="hint">When one runs out of credits, the next is used.</span>
       <div id="hklist" class="hklist"></div>
       <button type="button" id="hkadd" class="ghost hkadd">+ Add another key</button>
+      <label class="chk" id="hkspreadrow" hidden><input type="checkbox" id="hkspread"> Use all my keys at the same time <span class="hint">(faster: each key adds its own requests per second, and their credits are used side by side)</span></label>
     </div>
   </details>
   <details class="mgrp"><summary>Analysis</summary>
@@ -297,7 +298,7 @@ html,body{min-height:100%}
   </section>
 </div>
 
-<script>window.WS_WEB_VERSION="1.50.2"</script>
+<script>window.WS_WEB_VERSION="1.53.0"</script>
 <script src="app-shim.js"></script>
 <script src="engine.js"></script>
 <script src="panel.js"></script>

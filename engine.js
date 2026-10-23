@@ -18,10 +18,18 @@ function hydrate(raw,px,o){
       else{const r=R.slice(0,K);cost=r.reduce((x,y)=>x+y[1],0);proc=r.reduce((x,y)=>x+y[2],0);qIn=r.reduce((x,y)=>x+y[3],0);qOut=r.reduce((x,y)=>x+y[4],0)}} // older saves: first K round trips
     // never sold (any tokens that left were only sent to another wallet): nothing was realized, so it's treated as unsold
     const noSell=!(a[7]>0);if(noSell&&qOut>0){qOut=0;proc=0}
+    // sold more than it bought in the trades loaded: its first buys were before the oldest trade read (the history stops
+    // once enough tokens are found). Count only the sells of the tokens we saw it buy, at the price it sold them for,
+    // which is what a copier who copied those buys would get. Before, every sell counted against the small later buy.
+    let early=false;if(!cut&&!noSell&&qIn>0&&qOut>qIn*1.02){proc*=qIn/qOut;qOut=qIn;early=true}
     const sold=qIn>0?Math.min(1,qOut/qIn):1;
     let part=sold>=0.95?1:sold; // profit counts only the part that was sold, against what that part cost
     // tokens still (partly) held: value what's left at today's price, so dead bags count as the losses they are
-    let mtm=null;if(sold<0.95&&cost>0){const cp=cpxGet(),p=cp[a[0]],s=cp[WSOL];if(p&&p[0]!=null&&s&&s[0]>0){mtm=Math.max(0,qIn-qOut)*p[0]/s[0];part=1}}
+    let mtm=null;if(sold<0.95&&cost>0){const cp=cpxGet(),p=cp[a[0]],s=cp[WSOL];if(p&&p[0]!=null&&s&&s[0]>0){mtm=Math.max(0,qIn-qOut)*p[0]/s[0];part=1}
+      // partly sold, and the rest has no price anywhere (not listed: usually a dead token): with "count never-sold tokens as
+      // losses" on, the rest counts as worth nothing, like GMGN's unrealized loss. Before, only the sold part counted, so a
+      // wallet that sold 20% at a profit and was stuck with the other 80% looked profitable.
+      else if(p&&p[0]==null&&o.openLoss&&sold>=0.02){mtm=0;part=1}}
     // a gain on tokens still held isn't a win yet (the wallet may never sell): today's price can only lower the result.
     // Never sold and up at today's price: counted as unsold (your "count never-sold tokens as losses" setting decides).
     // Partly sold: what's left counts at its cost, never more.
@@ -30,7 +38,7 @@ function hydrate(raw,px,o){
     return {tok:a[0],t:a[1],buyUsd,sellUsd:a[3]*(a[13]?proc/a[13]:1),buySol,sellSol:proc,firstSol:a[5],mcap,est:a[14]>0,sold,
       sellMc:a[10]>0?a[15]/a[10]*(a[16]||o.supply):null,
       pool:a[21]||null,solUsd:a[22]||null,pxIn:a[21]?a[4]:null,pxOut:a[21]&&a[10]>0&&a[15]?a[15]/a[10]:null,lastSell:a[8]||0,
-      R,ev:EV,buys:EV?nBuys(EV):(a[6]||1),rounds:R?R.length:1,cut,pool0:a[27]||a[21]||null,platD:platGet()[a[27]||a[21]]||null,plat:platFam(platGet()[a[27]||a[21]])||null,nb:a[6],ns:a[7],tin:a[17]||0,tout:a[18]||0,hold:a[8]?(a[8]-a[1])/60:null,dump:a[28]?(a[28]-a[1])/60:null,last:a[11],ret,open:sold<0.02&&mtm==null,held:mtm!=null?{val:mtm,frac:1-sold}:null,
+      R,ev:EV,buys:EV?nBuys(EV):(a[6]||1),rounds:R?R.length:1,cut,pool0:a[27]||a[21]||null,platD:platGet()[a[27]||a[21]]||null,plat:platFam(platGet()[a[27]||a[21]])||null,nb:a[6],ns:a[7],tin:a[17]||0,tout:a[18]||0,hold:a[8]?(a[8]-a[1])/60:null,dump:a[28]?(a[28]-a[1])/60:null,last:a[11],ret,open:sold<0.02&&mtm==null,held:mtm!=null?{val:mtm,frac:1-sold}:null,early,
       route:STABLE.has(a[0])||mcap>5e6||(Math.abs(ret)<0.01&&a[6]>=2&&a[7]>=1)}});
 }
 /* most recent N tokens bought (by first buy time), after dropping swap-route tokens */
@@ -125,9 +133,16 @@ const hkCost=opt=>{try{const b=JSON.parse(opt.body);return (Array.isArray(b)?b:[
 /* One shared lane for Helius: at most HMAX requests in flight across every tab of the panel (Top traders, Holders,
    Wallet, Automatic). Without it, a Holders check started during Top traders scoring floods the key, Helius answers
    "too many requests", and wallets come back unscored. */
-const HMAX=3,HSEM={n:0,q:[]};
-const hAcq=()=>HSEM.n<HMAX?(HSEM.n++,Promise.resolve()):new Promise(r=>HSEM.q.push(r));
-const hRel=()=>{const r=HSEM.q.shift();if(r)r();else HSEM.n=Math.max(0,HSEM.n-1)};
+// one lane per key. With "use all keys at once" on, each request goes to the key with the fewest requests waiting, so two
+// keys give twice the requests per second (and their credits are used side by side)
+const HMAX=3,HL={},hLane=k=>HL[k]||(HL[k]={n:0,q:[]});
+const hAcq=k=>{const L=hLane(k);return L.n<HMAX?(L.n++,Promise.resolve()):new Promise(r=>L.q.push(r))};
+const hRel=k=>{const L=hLane(k),r=L.q.shift();if(r)r();else L.n=Math.max(0,L.n-1)};
+const hkSpread=()=>{try{return localStorage.getItem('ff-hk-spread')==='1'}catch(e){return false}};
+const hkLive=()=>hkLoad().filter(x=>!x.out);
+function hkPick(){const l=hkLive();if(!l.length)return '';if(!hkSpread()||l.length<2)return l[0].k;
+  let best=l[0];for(const e of l){const a=hLane(e.k),b=hLane(best.k);if(a.n+a.q.length<b.n+b.q.length)best=e}return best.k}
+function hkLanes(){return hkSpread()?Math.max(1,hkLive().length):1}
 /* Browser storage (localStorage) holds about 5 MB for the whole extension. When it's full, writes fail silently and
    scores never stick, so writes go through lsPut: on "quota exceeded" it frees rebuildable data and tries again. */
 let LS_FULL=false;
@@ -152,20 +167,24 @@ function lsPut(k,v){try{localStorage.setItem(k,v);LS_FULL=false;return true}catc
   if(!LS_AUTO){LS_FULL=true;return false}lsFree();try{localStorage.setItem(k,v);LS_FULL=false;return true}catch(e){LS_FULL=true;return false}}
 async function getJSON(url,opt){
   let key=url.startsWith(RPC)?url.slice(RPC.length):null;const tried=new Set();
+  if(key&&hkSpread()){const k=hkPick();if(k){key=k;url=RPC+k}}
   const next=why=>{if(!key)return false;hkMark(key,why==='limit'?{out:why,used:HK_LIMIT}:{out:why});tried.add(key);const k=hkActive();if(!k||tried.has(k))return false;key=k;url=RPC+k;return true};
   for(let a=0;a<5;a++){let r;
-    const lane=url.startsWith(RPC);if(lane)await hAcq();
+    const lane=url.startsWith(RPC),lk=key;if(lane)await hAcq(lk);
     // a request that never answers would hold its lane forever and freeze everything behind it: give up after 30s and retry
     const ac=new AbortController(),to=setTimeout(()=>ac.abort(),30000);
-    try{r=await fetch(url,{...opt,signal:ac.signal});clearTimeout(to)}catch(e){clearTimeout(to);if(lane)hRel();if(a===4)throw new Error('Could not reach '+new URL(url).host+'. Check your internet connection.');await sleep(1200*(a+1));continue}
-    if(lane)hRel();
+    try{r=await fetch(url,{...opt,signal:ac.signal});clearTimeout(to)}catch(e){clearTimeout(to);if(lane)hRel(lk);if(a===4)throw new Error('Could not reach '+new URL(url).host+'. Check your internet connection.');await sleep(1200*(a+1));continue}
+    if(lane)hRel(lk);
     if(r.status===401||r.status===403){if(next('rejected')){a--;continue}throw new Error(key?'Helius rejected your key'+(tried.size>1?'s':'')+'. Check them on your Helius dashboard.':'Helius rejected the key. Check it on your Helius dashboard and paste it again.')}
     if(r.status===429){let t='';try{t=await r.text()}catch(e){}
       if(key&&/max usage|credits? (limit|exhausted)|out of credits/i.test(t)){if(next('limit')){a--;continue}throw new Error('All your Helius keys have used up their monthly credits. Add another key in Settings.')}
       await sleep(1500*(a+1));continue}
     if(r.status>=500){await sleep(1500*(a+1));continue}
     if(key)hkCount(key,hkCost(opt));
-    return r.json()}
+    const j=await r.json();
+    // some plans answer "out of credits" inside a normal reply instead of a 429: switch keys the same way
+    if(key&&j&&j.error&&/max usage|credits? (limit|exhausted)|out of credits|exceeded.*credits/i.test(j.error.message||'')){if(next('limit')){a--;continue}throw new Error('All your Helius keys have used up their monthly credits. Add another key in Settings.')}
+    return j}
   throw new Error('Helius is busy right now. Wait a minute and try again.');
 }
 /* Pull a wallet with Helius getTransactionsForAddress (10 credits per 100 transactions)
