@@ -77,6 +77,12 @@ header{display:flex;align-items:center;justify-content:space-between}
 .fv .k{font-size:11px;color:var(--muted)}
 .fv .v{font-family:var(--mono);font-size:15px;font-weight:600}
 .fv.copied .k{color:var(--win)}
+.fhead{display:flex;align-items:center;justify-content:space-between;gap:8px}.fedbtn{padding:3px 10px;font-size:12px;flex:0 0 auto}
+.fedit{background:var(--raise);border:1px solid var(--line2);border-radius:10px;padding:10px;margin-bottom:8px}
+.fedgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.fedgrid .fld{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--muted)}
+.fedgrid input{width:100%;box-sizing:border-box}.fedbtns{display:flex;gap:8px;margin-top:10px;align-items:center}
+.fcusnote{border:1px solid color-mix(in srgb,var(--amber) 45%,transparent);background:color-mix(in srgb,var(--amber) 9%,transparent);border-radius:8px;padding:7px 9px;margin:0 0 8px}
+.tag.fcus{background:color-mix(in srgb,var(--amber) 18%,transparent);color:var(--amber)}
 .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
 .kpi{display:flex;flex-direction:column;padding:2px 2px}
 .kpi .k{font-size:11px;color:var(--muted)}
@@ -94,6 +100,7 @@ header{display:flex;align-items:center;justify-content:space-between}
 .run{margin-top:2px;background:var(--raise);border:1px solid var(--line2);border-radius:8px;padding:6px 11px;font-size:12px;font-weight:600}
 .run:hover{border-color:var(--win)}
 .run:disabled{opacity:.5;cursor:wait}
+.run.alt{margin:6px 0 0;display:block;background:transparent;border-color:color-mix(in srgb,var(--win) 45%,transparent);color:var(--win)}
 
 .seg{display:inline-flex;border:1px solid var(--line2);border-radius:7px;overflow:hidden}
 .seg button{background:none;border:0;padding:2px 8px;font-size:11px;color:var(--muted);text-transform:none;letter-spacing:0}
@@ -200,6 +207,9 @@ body.win #popout{display:none}
 .ttr.gold,.ttr.great{border:1px solid;border-radius:10px;padding:7px 8px;margin:3px 0}
 .ttr.gold{border-color:var(--amber);background:rgba(240,185,11,.07);box-shadow:0 0 0 1px rgba(240,185,11,.25)}
 .ttr.great{border-color:var(--win);background:rgba(46,189,133,.06)}
+.ttr.spam{border:2px solid var(--loss);border-radius:10px;padding:7px 8px;margin:3px 0;background:#0a0a0c;box-shadow:inset 0 0 0 2px #000}
+.ttr.spam .sc{background:#000!important;color:var(--loss)!important;box-shadow:inset 0 0 0 1px var(--loss)}
+.scorecard.spam{border:2px solid var(--loss);background:#0a0a0c;box-shadow:inset 0 0 0 3px #000}
 .ttr.gold+.ttr,.ttr.great+.ttr{border-top-color:transparent}
 .ttr.gold .sc{box-shadow:inset 0 0 0 1px var(--amber)}
 .ttr.great .sc{box-shadow:inset 0 0 0 1px var(--win)}
@@ -210,9 +220,9 @@ body.win #popout{display:none}
 .trimnote{grid-column:1/-1;margin:4px 0 0}
 
 /* Multi-Wallet: one person trading the token from several wallets (60%+ same-block buys/sells) */
-.ttr.multi{border:1px solid #f7931a;border-radius:10px;padding:7px 8px;margin:3px 0;background:rgba(247,147,26,.07)}
+.ttr.multi{border:1px solid var(--mc,#f7931a);border-radius:10px;padding:7px 8px;margin:3px 0;background:color-mix(in srgb,var(--mc,#f7931a) 8%,transparent);box-shadow:inset 3px 0 0 var(--mc,#f7931a)}
 .ttr.multi+.ttr{border-top-color:transparent}
-.mwt{display:inline-block;margin-left:6px;font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;background:rgba(247,147,26,.16);color:#f7931a;cursor:help;vertical-align:1px}
+.mwt{display:inline-block;margin-left:6px;font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;background:color-mix(in srgb,var(--mc,#f7931a) 18%,transparent);color:var(--mc,#f7931a);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--mc,#f7931a) 45%,transparent);cursor:help;vertical-align:1px}
 
 /* Migrated scanner */
 #vms{display:flex;flex-direction:column;gap:10px}
@@ -471,6 +481,7 @@ header{position:relative;z-index:56}
 .chkbar i{display:block;height:100%;background:var(--win);border-radius:99px;transition:width .4s ease}
 .chkbar.wait i{width:30%!important;animation:chkslide 1.2s ease-in-out infinite}
 @keyframes chkslide{0%{transform:translateX(-100%)}100%{transform:translateX(340%)}}
+.ttprog .chkline{display:flex;align-items:center;justify-content:space-between;gap:8px}.ttprog .ghost{padding:3px 10px;font-size:12px}
 .chkline{font-size:12px;color:var(--muted)}.chkline b{color:var(--ink)}
 @media (prefers-reduced-motion:reduce){.chkbar.wait i{animation:none}}
 

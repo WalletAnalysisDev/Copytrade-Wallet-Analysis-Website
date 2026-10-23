@@ -54,8 +54,9 @@ html,body{min-height:100%}
     <label class="chk"><input type="checkbox" id="maxtf" checked> Suggest a max trades per token <span class="hint">(copy only the first 1, 2, 3 or 5 buy-ins on each token, when that does better than copying every re-entry)</span></label>
     <label class="chk"><input type="checkbox" id="agef" checked> Suggest a token age filter <span class="hint">(min / max time since the token was created, when it clearly does better)</span></label>
     <label class="chk"><input type="checkbox" id="autocheck"> Check round-trips &amp; entry spikes automatically <span class="hint">(about 20 Helius credits per token)</span></label>
-    <label class="chk"><input type="checkbox" id="chkall" checked> Check spikes &amp; round-trips on all analyzed tokens <span class="hint">(not just the ones in filters, so every token can get a label on GMGN; the score still only uses tokens in filters)</span></label>
+    <label class="chk" hidden><input type="checkbox" id="chkall"> Check spikes &amp; round-trips on all analyzed tokens <span class="hint">(not just the ones in filters, so every token can get a label on GMGN; the score still only uses tokens in filters)</span></label>
     <label class="chk"><input type="checkbox" id="gmgn" checked> Show Wallet Score on GMGN pages <span class="hint">(score, filters and token tags on wallet pages)</span></label>
+    <label class="chk"><input type="checkbox" id="gmmaker"> Open tokens from a GMGN wallet page filtered to that wallet <span class="hint">(shows only that wallet's buys and sells on the token)</span></label>
     <label class="fld">Only check wallets scoring at least<input type="number" id="rsmin" min="0" max="100" step="5" placeholder="any (every wallet)"><span class="hint">Applies to the round-trip &amp; spike check in every tab.</span></label>
   </details>
   <details class="mgrp" id="lsgrp"><summary>Storage</summary>
@@ -89,7 +90,7 @@ html,body{min-height:100%}
 <div class="wrow"><label class="lastn">Analyze tokens <input type="number" id="lastn" min="5" step="5" value="50"></label><label class="lastn" title="If the wallet stopped buying for this many days and then came back, only the tokens bought after that break are analyzed. Blank or 0 = off.">Skip tokens before a break of <input type="number" id="wgapd" min="0" step="1" placeholder="off"> days</label>
 <div class="wchks"><label class="chk autotab" title="When the GMGN tab you're on shows a wallet page (or a token page filtered to a wallet), score that wallet right away. Saved wallets open free and only fetch new trades."><input type="checkbox" id="autotab"> Auto-check the wallet page I'm on</label>
 <label class="chk autotab" title="Run the round-trip &amp; spike check on every wallet you analyze (about 20 Helius credits per token)"><input type="checkbox" id="wautochk"> Auto-check spikes &amp; round-trips</label>
-<label class="wscope" title="Which tokens the spike &amp; round-trip check covers (automatic or with the Check button). Tokens in filters are the ones that count in the score; all tokens also gives every token a label on GMGN.">Check <select id="wchkscope"><option value="all">all analyzed tokens</option><option value="kept">only tokens in filters</option></select></label></div></div>
+<label class="wscope" hidden title="Which tokens the spike &amp; round-trip check covers (automatic or with the Check button). Tokens in filters are the ones that count in the score; all tokens also gives every token a label on GMGN.">Check <select id="wchkscope"><option value="all">all analyzed tokens</option><option value="kept">only tokens in filters</option></select></label></div></div>
 <button type="button" id="fromtab" class="suggest" hidden></button>
 <div id="hist" class="chips"></div>
 <p id="status" class="status" role="status"></p>
@@ -123,7 +124,9 @@ html,body{min-height:100%}
   </section>
 
   <section class="card">
-    <div class="ctitle">Recommended filters <span class="hint">tap a value to copy</span></div>
+    <div class="ctitle fhead"><span><span id="fttl">Recommended filters</span> <span class="hint">tap a value to copy</span></span><button type="button" class="ghost fedbtn" id="fedbtn">Edit</button></div>
+    <p class="tipline fcusnote" id="fcusnote" hidden></p>
+    <div class="fedit" id="fedit" hidden></div>
     <div class="fgrid" id="filters"></div>
     <div class="kpis" id="kpis"></div>
   </section>
@@ -180,6 +183,7 @@ html,body{min-height:100%}
     <label title="Only run the round-trip &amp; spike check on wallets that already score at least this much (blank = every wallet). Saves credits on weak wallets.">only if score ≥ <input type="number" id="ttrsmin" min="0" max="100" step="5" placeholder="any" style="width:52px"></label>
     <label class="chk" title="As soon as a search finishes, score every trader it found (about 100 Helius credits per wallet; wallets already scored are free)"><input type="checkbox" id="ttauto"> Auto-score all found wallets</label>
     <label class="chk" title="Also run the round-trip &amp; spike check while auto-scoring (slower, more credits). Off: quick scores now, then use Check spikes &amp; round-trips when you want it."><input type="checkbox" id="ttautors"> Include round-trips &amp; spikes when auto-scoring</label>
+    <label class="chk" title="About 50% faster. On the free Helius plan some wallets may come back busy; they're retried at the end."><input type="checkbox" id="ttfast"> Score 3 wallets at a time <span class="hint">(faster, may hit Helius limits on the free plan)</span></label>
   </div>
   <div class="ttopts" id="hdopts" hidden>
     <label>Show top <select id="hdn"><option value="25">25</option><option value="50">50</option><option value="100">100</option></select> holders</label>
@@ -187,6 +191,7 @@ html,body{min-height:100%}
     <span class="hint">History read: uses "Read up to" from Top traders.</span>
   </div>
   <p id="ttstatus" class="status" role="status"></p>
+  <div id="ttprog" class="chkprog ttprog" hidden><div class="chkbar wait" id="ttprogbar"><i></i></div><div class="chkline"><span id="ttprogt">Starting…</span> <button type="button" id="ttscanstop" class="ghost">Stop</button></div></div>
   <p id="ttkeep" class="hint" hidden>Keep this open while it works, or use the window button above.</p>
   <section class="card" id="ttres" hidden>
     <div class="ctitle"><span id="tthead">Top traders</span>
@@ -291,7 +296,7 @@ html,body{min-height:100%}
   </section>
 </div>
 
-<script>window.WS_WEB_VERSION="1.35.0"</script>
+<script>window.WS_WEB_VERSION="1.49.0"</script>
 <script src="app-shim.js"></script>
 <script src="engine.js"></script>
 <script src="panel.js"></script>

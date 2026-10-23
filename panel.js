@@ -28,7 +28,7 @@ $('upd').addEventListener('click',async()=>{
   chrome.runtime.reload()});
 updCheck();setInterval(updCheck,60000);
 window.addEventListener('focus',updCheck);document.addEventListener('visibilitychange',()=>{if(!document.hidden)updCheck()});
-const RULES_V=31; // scoring-code version: bump whenever adjustScore or the filter search changes, so saved scores get recomputed
+const RULES_V=41; // scoring-code version: bump whenever adjustScore or the filter search changes, so saved scores get recomputed
 const rulesV=()=>RULES_V+':'+scVer(); // also changes when you edit Custom scoring
 const DEF={maxtf:true,gapd:14,agef:true,gmgn:true,chkall:true,lsauto:true,autotab:false,period:0,rsmin:0,lastn:50,minn:10,slip:0,openloss:true,autocheck:false,nodev:false,maxr:0,offplat:[],adj:true};
 let SET={...DEF};try{SET={...DEF,...JSON.parse(store.get('ws-set')||'{}')}}catch(e){}
@@ -123,7 +123,7 @@ async function score(addr,offline,auto){
   if(!CUR||CUR.wallet!==addr)$('res').hidden=true; // don't leave the previous wallet's score on screen
   // the quick score from Top traders / Automatic, kept so the Wallet tab can explain a difference
   const quick=CUR&&CUR.wallet===addr&&CUR.quick?CUR.quick:(()=>{try{const q=JSON.parse(localStorage.getItem('ws-tts:'+addr)||'null');return q&&q.src!=='wallet'&&q.score!=null?q:null}catch(e){return null}})();
-  try{const w=await pull(addr,offline);w.quick=quick;CUR=w;store.set('ws-last',addr);try{const t=JSON.parse(localStorage.getItem('ws-tt')||'{}');if(t[addr]){delete t[addr];localStorage.setItem('ws-tt',JSON.stringify(t))}}catch(e){} /* opened by hand: show it in history */$('addr').value=addr;rerender();
+  try{const w=await pull(addr,offline);w.quick=quick;const keepOvr=CUR&&CUR.ovr&&CUR.ovr.w===addr?CUR.ovr:null;CUR=w;if(keepOvr)CUR.ovr=keepOvr;store.set('ws-last',addr);try{const t=JSON.parse(localStorage.getItem('ws-tt')||'{}');if(t[addr]){delete t[addr];localStorage.setItem('ws-tt',JSON.stringify(t))}}catch(e){} /* opened by hand: show it in history */$('addr').value=addr;rerender();
     status(offline?'Opened from saved history. No Helius credits used.':`Done. ${w.raw.length} tokens · ${w.newTx} new transactions · about ${w.credits} Helius credits.`+(receiverNote(w)?' '+receiverNote(w):''));
     renderHist();hiMaybe();if(!offline)hubPush().catch(()=>{});
     if(offline&&getKey()&&CUR.A){const ms=[...new Set(CUR.A.trades.map(t=>t.tok))],d=devGet();
@@ -185,13 +185,13 @@ function pnl7Of(all,ref,solUsd){
 }
 const usd0=x=>(x<0?'−$':'$')+Math.abs(Math.round(x)).toLocaleString();
 /* the wallet beyond its best filter: win rate over every analyzed trade, and its last 7 days (all trades, and those inside the filters) */
-function formOf(U,kept,o,ref){const wk=(ref||Date.now()/1000)-7*86400,st=l=>{let n=0,w=0,p=0;for(const t of l){const x=adjRet(t,o);if(x==null)continue;n++;if(isWin(x))w++;p+=x*t.buySol}return {n,win:n?w/n:0,pnl:p}};
-  return {all:st(U),kept:st(kept),rec:st(U.filter(t=>t.t>=wk)),recF:st(kept.filter(t=>t.t>=wk))}}
+function formOf(U,kept,o,ref,f){const wk=(ref||Date.now()/1000)-7*86400,st=l=>{let n=0,w=0,p=0,inv=0,ws=0,ls=0;for(const t of l){const x=adjRet(t,o);if(x==null)continue;n++;if(isWin(x)){w++;ws+=x}else ls+=x;p+=x*t.buySol;inv+=t.buySol}return {n,win:n?w/n:0,pnl:p,roi:inv?p/inv:null,avgWin:w?ws/w:null,avgLoss:n-w?ls/(n-w):null}};
+  return {all:st(U),kept:st(kept),rec:st(U.filter(t=>t.t>=wk)),recF:st(kept.filter(t=>t.t>=wk)),lo:f?f.lo||0:null}}
 function adjustScore(base,buys7,est,hold,p7,perfect,n,fast,rs,trades7,form){ // every number here comes from SC(): the defaults (Automatic) or your own (Custom)
   if(base==null)return {score:null,parts:[]};const parts=[],c=SC(),on=c.on;
   const act=trades7!=null?trades7:buys7!=null?buys7*2:null; // 7-day trades (buys + sells); older saved data only has buys
   // dealbreakers that also stop a perfect 100: very busy (top activity tier), every trading day red, quick flipper
-  const heavyBuys=on.act&&act!=null&&act>=c.actHi,allRed=on.p7&&p7&&p7.pos===0&&p7.neg>0,flipper=on.flip&&fast&&fast.shareF>=c.flipShare/100;
+  const heavyBuys=on.act&&act!=null&&act>=c.actMid,allRed=on.p7&&p7&&p7.pos===0&&p7.neg>0,flipper=on.flip&&fast&&fast.shareF>=c.flipShare/100;
   // a perfect record inside the filters only counts if the wallet holds up outside them too: overall win rate, a mostly-green week, recent trades not losing
   const allW=form&&form.all.n?form.all.win*100:null,recUse=form?(form.recF.n>=3?form.recF:form.rec):null,recW=recUse&&recUse.n>=Math.min(3,c.recMinN)?recUse.win*100:null;
   // short-hold strategy: most tokens sold within ~40s. Its win rate doesn't carry over to a copier, so the score is capped (60 by default)
@@ -206,12 +206,25 @@ function adjustScore(base,buys7,est,hold,p7,perfect,n,fast,rs,trades7,form){ // 
   const add=(v,l)=>{if(v)parts.push([v,l])};
   // filters turn a losing wallet profitable: its weak overall numbers and red days matter less, because a copier using the filters skips those trades
   const rescued=on.rescue&&form&&form.kept&&form.kept.n>=c.rescueN&&form.kept.pnl>0&&form.all.pnl<0,rTag=' (softened: filters make it profitable)';
-  if(on.overall&&allW!=null&&form.all.n>=5){const lab=`${Math.round(allW)}% win over all ${form.all.n} trades analyzed`,v=allW<c.allLow?c.allLowPts:allW<c.allMid?c.allMidPts:0;
+  // the filters prove themselves (40%+ win, average win +100% or more, average loss under 41%): the overall win rate penalty is dropped
+  const proved=on.prove&&form&&form.lo!=null&&form.kept&&form.kept.n>=c.provN&&form.kept.win*100>=c.provWin&&form.kept.avgWin!=null&&form.kept.avgWin*100>=c.provAvgW&&(form.kept.avgLoss==null||-form.kept.avgLoss*100<c.provAvgL);
+  if(on.overall&&allW!=null&&form.all.n>=5&&!proved){const lab=`${Math.round(allW)}% win over all ${form.all.n} trades analyzed`,v=allW<c.allLow?c.allLowPts:allW<c.allMid?c.allMidPts:allW<(c.allHi??0)?(c.allHiPts??0):0;
     if(v)rescued?add(Math.round(v*c.rescueAll/100),lab+rTag):add(v,lab)}
   // filters make the difference: much more profit inside the filters than without them (a loser overall counts as the biggest jump)
   if(on.edge&&form&&form.kept&&form.kept.n>=c.edgeN&&form.kept.pnl>=c.edgeMin){const k=form.kept,a=form.all,x=a.pnl>0?k.pnl/a.pnl:Infinity,up=(k.win-a.win)*100;
     const lab=`filters: ${sol(k.pnl)} vs ${sol(a.pnl)} without${x!==Infinity?` (${x>=10?Math.round(x):+x.toFixed(1)}×)`:''}`;
     if(x>=c.edgeX2&&up>=c.edgeWinUp)add(c.edgePts2,lab+`, win rate +${Math.round(up)} pts`);else if(x>=c.edgeX1)add(c.edgePts1,lab)}
+  // the filters beat all trades: +5 for each of win rate, profit, return and average win that's at least 10% better
+  // not for wallets buying 500+ times a week: a copier can't keep up with that many buys, so the filter edge doesn't carry over
+  if(on.better&&form&&form.kept&&form.kept.n>=c.betN&&form.kept.n<form.all.n&&!(buys7!=null&&c.betMaxBuys>0&&buys7>=c.betMaxBuys)){const k=form.kept,a=form.all,P=v=>Math.round(v*100)+'%';
+    if((k.win-a.win)*100>=c.betWin)add(c.betPts,`filters: win rate ${P(k.win)} vs ${P(a.win)} (+${Math.round((k.win-a.win)*100)} pts)`);
+    if(k.pnl>0&&k.pnl>a.pnl&&k.pnl-a.pnl>=Math.abs(a.pnl)*c.betPnl/100)add(c.betPts,`filters: profit ${sol(k.pnl)} vs ${sol(a.pnl)}`);
+    if(k.roi!=null&&a.roi!=null&&(k.roi-a.roi)*100>=c.betRoi&&k.roi*100>=c.betRoiMin)add(c.betPts,`filters: return ${(k.roi>=0?'+':'')+P(k.roi)} vs ${(a.roi>=0?'+':'')+P(a.roi)}`);
+    if(k.avgWin!=null&&a.avgWin!=null&&(k.avgWin-a.avgWin)*100>=c.betAvg&&k.avgWin*100>=c.betAvgMin)add(c.betPts,`filters: avg win +${P(k.avgWin)} vs +${P(a.avgWin)}`)}
+  // recommended filters that only buy at a high market cap: less room to run, more risk for a copier
+  // small total profit inside the filters: not much to copy
+  if(on.lowpnl&&form&&form.lo!=null&&form.kept&&form.kept.n&&form.kept.pnl<c.lowPnl)add(c.lowPnlPts,`profit in filters ${sol(form.kept.pnl)} (under ${c.lowPnl} SOL)`);
+  if(on.himc&&form&&form.lo!=null&&c.hiMc>0&&form.lo>=c.hiMc)add(c.hiMcPts,`high market cap risk: filters start at ${fm(form.lo)}`);
   if(on.form&&form&&form.rec.n>=c.recMinN){
     if(form.recF.n>=3||form.rec.n){const u=form.recF.n>=3?form.recF:form.rec,w=Math.round(u.win*100),lab=`last 7 days: ${w}% win over ${u.n} trade${u.n===1?'':'s'}${u===form.recF?' in filters':''}`;
       if(w<c.recLow)add(c.recLowPts,lab);else if(w<c.recMid)add(c.recMidPts,lab)}
@@ -220,7 +233,7 @@ function adjustScore(base,buys7,est,hold,p7,perfect,n,fast,rs,trades7,form){ // 
   if(on.winhi&&base>c.winHi&&n!=null&&n>=c.winHiN)add(c.winHiPts,`win rate ${base}% in filters (over ${c.winHi}%)`);
   if(on.win){if(base<c.winLow)add(c.winLowPts,`win rate ${base}% (under ${c.winLow}%)`);else if(base<=c.winMid)add(c.winMidPts,`win rate ${base}% (${c.winMid}% or less)`)}
   if(on.act&&act!=null){const lab=`${est||trades7==null?'~':''}${act.toLocaleString()} trades in 7 days${buys7!=null?` (${buys7.toLocaleString()} buys)`:''}`;
-    if(act>=c.actHi)add(c.actHiPts,lab+` (${c.actHi.toLocaleString()}+)`);else if(act>c.actMid)add(c.actMidPts,lab+` (over ${c.actMid.toLocaleString()})`);else if(buys7!=null&&buys7<c.buysLow)add(c.buysLowPts,lab)}
+    if(act>=c.actHi)add(c.actHiPts,lab+` (${c.actHi.toLocaleString()}+)`);else if(act>=c.actMid)add(c.actMidPts,lab+` (${c.actMid.toLocaleString()}–${(c.actHi-1).toLocaleString()})`);else if(buys7!=null&&buys7<c.buysLow)add(c.buysLowPts,lab)}
   if(on.hold&&hold!=null&&!flipper){const lab=`avg hold ${fmtHold(hold)}`;
     if(hold*60<c.holdShort)add(c.holdShortPts,lab);else if(hold*60>c.holdLong&&c.holdMax>0)add(Math.max(1,Math.min(c.holdMax,Math.round(c.holdMax*0.625*Math.log(Math.max(hold,1.0001))/Math.log(15)))),lab)}
   if(flipper)add(c.flipPts,`quick flipper: ${Math.round(fast.shareF*100)}% of tokens sold within ${c.flipSec}s (${fast.nF}/${fast.of})`);
@@ -304,34 +317,61 @@ function trimWeakEdges(best,U,o){
   return {best:f,trims};
 }
 
+/* ---------- your own filters: what the wallet would do under them ---------- */
+function ovrF(v,U,o){const f={lo:v.lo||0,hi:v.hi??Infinity,slo:v.slo||0,shi:v.shi??Infinity,alo:v.alo??null,ahi:v.alo!=null||v.ahi!=null?(v.ahi??Infinity):Infinity,custom:true};
+  if(f.alo==null&&v.ahi!=null)f.alo=0;const k=summarize(U.filter(t=>inF(t,f)),o);return Object.assign(f,{n:k.n,win:k.win,pnl:k.pnl})}
+const parseAge=s=>{const m=String(s||'').trim().toLowerCase().match(/^(\d*\.?\d+)\s*(m|min|h|hr|d|day|days)?$/);if(!m)return null;const n=+m[1],u=m[2]||'h';return u[0]==='m'?n/60:u[0]==='d'?n*24:n};
+function fedOpen(){const A=CUR&&CUR.A;if(!A)return;const f=A.best||A.rec||{lo:0,hi:Infinity,slo:0,shi:Infinity,alo:null,ahi:Infinity};
+  const nv=v=>v==null||v===Infinity?'':String(+(+v).toFixed(4)),ag=v=>v==null||v===Infinity?'':fmAge(v);
+  $('fedit').innerHTML=`<div class="fedgrid">
+    <label class="fld">Min market cap ($)<input type="number" min="0" step="1000" id="fe-lo" value="${nv(f.lo)}" placeholder="0"></label>
+    <label class="fld">Max market cap ($)<input type="number" min="0" step="1000" id="fe-hi" value="${nv(f.hi)}" placeholder="no max"></label>
+    <label class="fld">Min SOL buy<input type="number" min="0" step="0.01" id="fe-slo" value="${nv(f.slo)}" placeholder="0"></label>
+    <label class="fld">Max SOL buy<input type="number" min="0" step="0.01" id="fe-shi" value="${nv(f.shi)}" placeholder="no max"></label>
+    <label class="fld">Min token age<input type="text" id="fe-alo" value="${f.alo?ag(f.alo):''}" placeholder="any (e.g. 30m, 2h, 3d)"></label>
+    <label class="fld">Max token age<input type="text" id="fe-ahi" value="${f.alo!=null?ag(f.ahi):''}" placeholder="no max"></label></div>
+    <div class="fedbtns"><button type="button" class="run" id="fe-go">See how it does</button><button type="button" class="ghost" id="fe-x">Cancel</button></div>`;
+  $('fedit').hidden=false;$('fe-go').addEventListener('click',fedApply);$('fe-x').addEventListener('click',()=>{$('fedit').hidden=true});
+  $('fedit').querySelectorAll('input').forEach(i=>i.addEventListener('keydown',e=>{if(e.key==='Enter')fedApply()}))}
+function fedApply(){const num=id=>{const v=$(id).value.trim();return v===''?null:Math.max(0,+v)},age=id=>{const v=$(id).value.trim();if(!v||/^(any|no max)$/i.test(v))return null;return parseAge(v)};
+  const v={w:CUR.wallet,lo:num('fe-lo'),hi:num('fe-hi'),slo:num('fe-slo'),shi:num('fe-shi'),alo:age('fe-alo'),ahi:age('fe-ahi')};
+  if(v.hi!=null&&v.lo!=null&&v.hi<=v.lo){status('Max market cap has to be above Min market cap.',true);return}
+  if(v.shi!=null&&v.slo!=null&&v.shi<=v.slo){status('Max SOL buy has to be above Min SOL buy.',true);return}
+  if(v.ahi!=null&&v.alo!=null&&v.ahi<=v.alo){status('Max token age has to be above Min token age.',true);return}
+  CUR.ovr=v;$('fedit').hidden=true;rerender();status('Showing your filters. The score, tokens and GMGN labels follow them until you go back to the recommended filters.')}
+function fedRevert(){if(!CUR)return;CUR.ovr=null;$('fedit').hidden=true;rerender();status('Back to the recommended filters.')}
+
 /* ---------- analysis ---------- */
 function analyze(){
   const o=opts(),all=hydrate(CUR.raw,CUR.px,o),ag=ageGet();for(const t of all){t.dev=isDev(t.tok,CUR.wallet);const c=ag[t.tok];t.age=c&&t.t>=c?(t.t-c)/3600:null} // age: hours since the token was created, at the wallet's first buy
   // period cut-off (Wallet tab only): tokens first bought in the last 7 / 14 / 30 days, or all of them
   const days=+SET.period||0,cut=days?(CUR.ref||CUR.pulled||Date.now()/1000)-days*86400:0,trades=days?all.filter(t=>t.t>=cut):all;
   const U=recent(trades,o).filter(t=>adjRet(t,o)!==null);
-  const base=summarize(U,o),{best:best0}=optimize(U,o),{best:best1,trims}=trimWeakEdges(best0,U,o),best=ageFilter(best1,U,o);
+  const base=summarize(U,o),{best:best0}=optimize(U,o),{best:best1,trims:trims0}=trimWeakEdges(best0,U,o),rec=ageFilter(best1,U,o);
+  // your own filters (Edit in Recommended filters): a what-if view, until you go back to the recommended ones
+  const custom=!!(CUR.ovr&&CUR.ovr.w===CUR.wallet),best=custom?ovrF(CUR.ovr,U,o):rec,trims=custom?[]:trims0;
   const keptList=best?U.filter(t=>inF(t,best)):U;
   const kept=summarize(keptList,o);
   const sc=U.length?Math.round((best?kept.win:base.win)*100):null;
   const perfect=kept.n>=SC().perfectN&&kept.win===1?kept.n:0; // enough trades, all profitable: a perfect 100
-  const hold=avgHoldOf(U),p7=pnl7Of(recent(trades,{...o,offPlat:[]}),CUR.ref||CUR.pulled,CUR.px||150),rs=rsOf(keptList,o),adj=adjustScore(sc,CUR.buys7,CUR.buys7est,hold,p7,perfect,kept.n,fastShareOf(U),rs,CUR.trades7,formOf(U,keptList,o,CUR.ref||CUR.pulled));
-  return {o,trades,U,base,best,keptList,kept,winScore:sc,hold,adj,score:adj.score,trims,rs,days,allN:recent(all,o).length};
+  const hold=avgHoldOf(U),p7=pnl7Of(recent(trades,{...o,offPlat:[]}),CUR.ref||CUR.pulled,CUR.px||150),rs=rsOf(keptList,o),adj=adjustScore(sc,CUR.buys7,CUR.buys7est,hold,p7,perfect,kept.n,fastShareOf(U),rs,CUR.trades7,formOf(U,keptList,o,CUR.ref||CUR.pulled,best));
+  const spam=spamOf(CUR.wallet);if(spam&&adj.score!=null){adj.parts.unshift([-adj.score,spamLab(spam)]);adj.score=0;adj.perfect=0}
+  return {o,trades,U,base,best,rec,custom,keptList,kept,winScore:sc,hold,adj,score:adj.score,spam,trims,rs,days,allN:recent(all,o).length};
 }
 let VIEW='kept';
 function rerender(){if(!CUR)return;const A=analyze();CUR.A=A;
-  if(!A.days)store.set('ws-score:'+CUR.wallet,String(A.score??'')); // a shorter period is a what-if view: saved scores stay on all tokens
+  if(!A.days&&!A.custom)store.set('ws-score:'+CUR.wallet,String(A.score??'')); // your own filters are a what-if too: the saved score stays on the recommended ones // a shorter period is a what-if view: saved scores stay on all tokens
   periodNote(A);if(!A.days)gmPublish(A);
   // the same score goes to Top traders and Automatic, so all three tabs show one number for a wallet
-  if(A.score!=null&&!A.days&&typeof WB!=='undefined'){const x=WB.list.find(x=>x.w===CUR.wallet);if(x&&x.st==='done'&&x.sc!==A.score){x.sc=A.score;x.grade=gradeOf(A.best?A.score:null)[0];wbRender()}} // keep the wallet list in step with the latest analysis
-  if(A.score!=null&&!A.days){try{lsPut('ws-tts:'+CUR.wallet,JSON.stringify({rv:rulesV(),score:A.score,win:A.winScore,parts:A.adj.parts,perfect:A.adj.perfect||0,reliable:!!A.best,n:A.kept.n,all:A.U.length,pnl:A.kept.pnl,hold:A.hold,buys7:CUR.buys7,src:'wallet'}))}catch(e){}}
+  if(A.score!=null&&!A.days&&!A.custom&&typeof WB!=='undefined'){const x=WB.list.find(x=>x.w===CUR.wallet);if(x&&x.st==='done'&&x.sc!==A.score){x.sc=A.score;x.grade=gradeOf(A.best?A.score:null)[0];wbRender()}} // keep the wallet list in step with the latest analysis
+  if(A.score!=null&&!A.days&&!A.custom){try{lsPut('ws-tts:'+CUR.wallet,JSON.stringify({rv:rulesV(),score:A.score,win:A.winScore,parts:A.adj.parts,perfect:A.adj.perfect||0,reliable:!!A.best,n:A.kept.n,all:A.U.length,pnl:A.kept.pnl,hold:A.hold,buys7:CUR.buys7,src:'wallet'}))}catch(e){}}
   $('res').hidden=false;
   // score ring
   const s=A.score,[g,col]=gradeOf(A.best?s:null);
   $('score').textContent=s??'–';
-  document.querySelector('.scorecard').classList.toggle('gold',A.best!=null&&s===100);document.querySelector('.scorecard').classList.toggle('great',A.best!=null&&s>=90&&s<100);
+  document.querySelector('.scorecard').classList.toggle('gold',A.best!=null&&s===100);document.querySelector('.scorecard').classList.toggle('great',A.best!=null&&s>=90&&s<100);document.querySelector('.scorecard').classList.toggle('spam',!!A.spam);
   const rv=$('ringval');rv.style.stroke=col;rv.style.strokeDashoffset=String(314.16*(1-(s||0)/100));
-  $('grade').textContent=A.best?g:'No reliable filter yet';$('grade').style.color=A.best?col:'var(--amber)';
+  $('grade').textContent=A.spam?'Spam bot · don\'t copy':A.best?g:'No reliable filter yet';$('grade').style.color=A.spam?'var(--loss)':A.best?col:'var(--amber)';
   const k=A.kept,b=A.base;
   $('why').innerHTML=A.best
     ?`Wins <b>${Math.round(k.win*k.n)} of ${k.n}</b> trades inside these filters${SC().on.winmin&&SC().winMin>0?` <span class="hint">(win = +${SC().winMin}% or more)</span>`:''}${k.n<15?' <span class="amb">· small sample</span>':''}${(()=>{const q=A.U.filter(t=>inF(t,A.best)&&isQS(t)).length;return q?` <span class="neg">· ${q} QuickSell${q>1?'s':''} counted as loss${q>1?'es':''}</span>`:''})()}. Without filters: <b>${Math.round(b.win*100)}%</b> of ${b.n}.`
@@ -350,6 +390,8 @@ function rerender(){if(!CUR)return;const A=analyze();CUR.A=A;
   const wl=$('wlink');wl.href='https://gmgn.ai/sol/address/'+encodeURIComponent(CUR.wallet);wl.textContent=short(CUR.wallet)+' on GMGN ↗';
   // filters
   const f=A.best;
+  $('fttl').innerHTML=A.custom?'Your filters <span class="tag fcus">testing</span>':'Recommended filters';$('fedbtn').textContent=A.custom?'Edit again':'Edit';
+  $('fcusnote').hidden=!A.custom;if(A.custom){const r=A.rec;$('fcusnote').innerHTML=`Testing your own filters: the score, the token list and the GMGN labels use them${r?` (recommended: ${fm(r.lo||0)}–${fm(r.hi)} MC, ${fmS(r.slo||0)}–${fmS(r.shi)} buy)`:''}. <button type="button" class="linkbtn" id="fe-rev">Back to recommended filters</button>`;$('fe-rev').addEventListener('click',fedRevert)}
   $('filters').innerHTML=f?[['Min market cap',f.lo?fm(f.lo):'$0',f.lo],['Max market cap',fm(f.hi),f.hi],['Min SOL buy',f.slo?fmS(f.slo):'0 SOL',f.slo],['Max SOL buy',fmS(f.shi),f.shi]].concat(f.alo!=null?[['Min token age',f.alo?fmAge(f.alo):'Any',f.alo?fmAge(f.alo):''],['Max token age',fmAge(f.ahi),f.ahi===Infinity?'':fmAge(f.ahi)]]:[]).concat((()=>{const m=maxTradesOf(A);return m?[['Max trades per token',String(m.K)+(m.inUse?' (your setting)':''),m.K]]:[]})())
     .map(([n,v,raw])=>`<button type="button" class="fv" data-copy="${raw===Infinity?'':esc(raw)}"><span class="k">${n}</span><span class="v">${esc(v)}</span></button>`).join('')
     :'<p class="empty">Not enough trades to pick filters.</p>';
@@ -369,6 +411,7 @@ function rerender(){if(!CUR)return;const A=analyze();CUR.A=A;
   $('foot').innerHTML=`Trades up to ${CUR.pulled?esc(ago(CUR.pulled))+' ago':'now'} · <button type="button" class="linkbtn footup" id="footup">update</button> · `+esc(`Last ${A.o.lastN} tokens bought · fill gap ${Math.round(A.o.slip*100)}% · ${A.o.openLoss?'unsold counted as losses':'unsold left out'}${A.o.offPlat.length?' · without '+A.o.offPlat.join(', '):''}`);
 }
 document.addEventListener('click',e=>{const u=e.target.closest('.mtuse');if(!u)return;SET.maxr=+u.dataset.k;saveSet();try{$('maxr').value=String(SET.maxr)}catch(x){}rerender()});
+$('fedbtn').addEventListener('click',()=>{if(!$('fedit').hidden){$('fedit').hidden=true;return}fedOpen()});
 $('filters').addEventListener('click',e=>{const b=e.target.closest('.fv');if(!b)return;const v=b.dataset.copy;
   if(navigator.clipboard)navigator.clipboard.writeText(v).catch(()=>{});
   const k=b.querySelector('.k'),old=k.textContent;b.classList.add('copied');k.textContent=v?'Copied':'No max: leave blank';setTimeout(()=>{b.classList.remove('copied');k.textContent=old},1100)});
@@ -511,10 +554,10 @@ function rsOf(list,o){
 }
 // tokens the round-trip & spike check covers: the ones in filters (they count in the score), plus every other analyzed token when
 // "all analyzed tokens" is on (only for labels on GMGN and in the token list; the score still uses the tokens in filters)
-function chkList(A){const k=A.keptList,ks=new Set(k);return (SET.chkall&&!(typeof WB!=='undefined'&&WB.run)?[...k,...(A.U||[]).filter(t=>!ks.has(t))]:k).filter(t=>t.pool&&t.pxIn)}
+function chkList(A){return (A.best?A.keptList:[]).filter(t=>t.pool&&t.pxIn)} // only tokens inside the recommended filters (the ones that count in the score)
 function renderRT(A){
   const o=A.o,list=chkList(A),checked=list.filter(t=>oppGet(t));
-  const left=list.length-checked.length,scope=SET.chkall||!A.best?'analyzed':'in filters';
+  const left=list.length-checked.length,scope='in filters';
   let h='';
   if(checked.length){
     const rts=checked.filter(t=>{const p=rtOf(t,o);return p!=null&&p>=0.5}),big=rts.filter(t=>rtOf(t,o)>=1);
@@ -537,9 +580,11 @@ function renderRT(A){
   }else h+=`<p class="empty">Shows how often this wallet lets winners turn into losses, and how much the price jumps on its buys.</p>`;
   if(CHK.on&&CUR&&CHK.wallet===CUR.wallet)h+=chkBar();
   else{if(CHK.fail&&CHK.wallet===(CUR&&CUR.wallet)&&left)h+=`<p class="tipline amb">${CHK.fail} token${CHK.fail>1?'s':''} couldn't be checked last time (${esc(CHK.why||'Helius busy or no price data')}). The button tries ${CHK.fail>1?'them':'it'} again.</p>`;
-    if(left)h+=`<button type="button" class="run" id="runchk">Check ${left} token${left>1?'s':''} ${scope} · about ${left*20} credits</button>`}
+    if(left)h+=`<button type="button" class="run" id="runchk">Check ${left} token${left>1?'s':''} ${scope} · about ${left*20} credits</button>`;
+    // checking all analyzed tokens: also offer just the ones in filters (the only ones that count in the score)
+    if(!A.best)h+=`<p class="tipline">No recommended filters yet, so there are no In Filter tokens to check.</p>`}
   $('rtbody').innerHTML=h;
-  const rb=$('runchk');if(rb)rb.addEventListener('click',runCheck);
+  const rb=$('runchk');if(rb)rb.addEventListener('click',()=>runCheck());
 }
 let checking=false;
 // progress of the spike & round-trip check, shown as a bar in the Round-trips card (in place of the Check button)
@@ -550,7 +595,7 @@ function chkBar(){const p=CHK.total?CHK.done/CHK.total:0,left=CHK.total-CHK.done
     <div class="chkline">Checking <b>${CHK.done} of ${CHK.total}</b> tokens${eta}${CHK.fail?` · <span class="amb">${CHK.fail} failed</span>`:''}</div></div>`}
 const fmtSecs=s=>s<60?Math.max(1,Math.round(s))+'s':Math.floor(s/60)+'m '+String(Math.round(s%60)).padStart(2,'0')+'s';
 const paintChk=()=>{const el=$('chkprog');if(el)el.outerHTML=chkBar()};
-async function runCheck(){
+async function runCheck(onlyKept){
   if(checking){status('The spike & round-trip check is already running: see the progress bar in Round-trips.');return}
   if(!CUR||!CUR.A)return;const key=getKey();if(!key){status('Add your Helius key in Settings first.',true);return}
   const list=chkList(CUR.A).filter(t=>!oppGet(t));if(!list.length){status('Every token in scope is already checked.');return}
@@ -662,7 +707,7 @@ whatsNew();
 
 /* ---------- Settings → Scoring: Automatic (built-in rules) or Custom (every rule editable) ---------- */
 const SC_UI=[
-  {id:'act',t:'Trades in the last 7 days',d:'Buys + sells, like GMGN\'s 7D TXs. The top tier also blocks a perfect 100.',f:[['actHi','Very busy at (trades)'],['actHiPts','Points'],['actMid','Busy over (trades)'],['actMidPts','Points'],['buysLow','Quiet under (buys)'],['buysLowPts','Points']]},
+  {id:'act',t:'Trades in the last 7 days',d:'Buys + sells, like GMGN\'s 7D TXs. 250+ trades also blocks a perfect 100.',f:[['actHi','Very busy at (trades)'],['actHiPts','Points'],['actMid','Busy at (trades)'],['actMidPts','Points'],['buysLow','Quiet under (buys)'],['buysLowPts','Points']]},
   {id:'hold',t:'Average hold time',d:'Short holds lose points; long holds earn a bonus that grows up to the max at about an hour.',f:[['holdShort','Short under (sec)'],['holdShortPts','Points'],['holdLong','Bonus over (sec)'],['holdMax','Max bonus']]},
   {id:'p7',t:'Green days (last 7 days)',d:'Most trading days green: points by profit per day. Most red: a penalty. Every day red also blocks a perfect 100.',f:[['g1','Under ($/day)'],['gP1','Points'],['g2','Under ($/day)'],['gP2','Points'],['g3','Under ($/day)'],['gP3','Points'],['gP4','Above that'],['redPts','Mostly red'],['redLossPts','Mostly red + week lost'],['allRedPts','Every day red']]},
   {id:'winmin',t:'What counts as a win',d:'A trade only counts as a win at this profit or more. Smaller gains (like +1% or +2%) count as losses for every win rate. Profit totals are unchanged.',f:[['winMin','Min profit for a win (%)']]},
@@ -671,7 +716,7 @@ const SC_UI=[
   {id:'short',t:'Short holds (score cap)',d:'Most tokens sold within this many seconds: a copier buys later and sells later, so a high win rate doesn\'t carry over. The score can\'t go above the cap, and no perfect 100.',f:[['shortSec','Sold within (sec)'],['shortShare','Share at least (%)'],['shortCap','Max score']]},
   {id:'flip',t:'Quick flipper',d:'Most tokens sold within seconds: a copier can\'t get those fills. Also blocks a perfect 100.',f:[['flipSec','Sold within (sec)'],['flipShare','Share at least (%)'],['flipPts','Points']]},
   {id:'qs',t:'QuickSells',d:'Sold within seconds after buying at a low market cap, or within a few seconds at any market cap: counted as a loss for the copier (never a win). Low-MC ones also raise Min market cap to block them.',f:[['qsSec','Low MC: sold within (sec)'],['qsMc','Low MC: market cap under ($)'],['qsAnySec','Any market cap: sold within (sec)'],['qsLoss','Copier loss (%)']]},
-  {id:'overall',t:'Overall win rate',d:'Win rate over every analyzed trade, not just inside the filters. A perfect 100 also needs at least the set win rate here.',f:[['allLow','Under (%)'],['allLowPts','Points'],['allMid','Under (%)'],['allMidPts','Points'],['perfAll','Perfect 100 needs (%)']]},
+  {id:'overall',t:'Overall win rate',d:'Win rate over every analyzed trade, not just inside the filters. A perfect 100 also needs at least the set win rate here.',f:[['allLow','Under (%)'],['allLowPts','Points'],['allMid','Under (%)'],['allMidPts','Points'],['allHi','Under (%)'],['allHiPts','Points'],['perfAll','Perfect 100 needs (%)']]},
   {id:'form',t:'Recent form (last 7 days)',d:'How its trades from the last 7 days did (inside the filters when there are 3+, otherwise all). A weak week also blocks a perfect 100.',f:[['recMinN','Min trades to judge'],['recLow','Under (% win)'],['recLowPts','Points'],['recMid','Under (% win)'],['recMidPts','Points'],['recNone','Filters fit none of them']]},
   {id:'perfect',t:'Perfect record',d:'Every trade profitable with at least this many trades scores 100; everyone else is capped.',f:[['perfectN','Trades needed'],['cap','Cap for the rest']]},
   {id:'few',t:'Too few tokens',d:'Applied after the cap, so bonuses can\'t cancel it.',f:[['few1','1 token'],['few2','2 tokens']]},
@@ -679,6 +724,10 @@ const SC_UI=[
   {id:'rt',t:'Round-trips',d:'Needs the round-trip & spike check. Trades that went up this much before closing red: take-profit upside.',f:[['rtPct','Round-trip (% up)'],['rtN1','At (trades)'],['rP1','Points'],['rtN2','At (trades)'],['rP2','Points'],['rtN3','At (trades)'],['rP3','Points']]},
   {id:'rescue',t:'Filters make it profitable',d:'When the wallet loses money overall but is profitable inside the recommended filters, the red-days penalty is reduced to this and the overall win rate penalty is cut to this share. A copier using the filters skips the losing trades.',f:[['rescueN','Min trades in filters'],['rescueRed','Red days penalty becomes (points)'],['rescueAll','Overall win rate penalty kept (%)']]},
   {id:'winhi',t:'High win rate',d:'Bonus when the win rate inside the filters is above this, over at least this many trades.',f:[['winHi','Above (% win)'],['winHiN','Min trades in filters'],['winHiPts','Points']]},
+  {id:'better',t:'Filters do better',d:'Points for each of win rate, profit, return and average win that is better inside the filters than over all trades. Win rate, return and average win: at least this many percentage points higher. Profit: at least this % more SOL (and above 0). No bonus for wallets with this many buys or more in the last 7 days (0 = no limit).',f:[['betN','Min trades in filters'],['betWin','Win rate higher by (pts)'],['betPnl','Profit higher by (%)'],['betRoi','Return higher by (pts)'],['betAvg','Avg win higher by (pts)'],['betPts','Points each'],['betMaxBuys','None at this many buys in 7 days'],['betRoiMin','Return bonus needs at least (%)'],['betAvgMin','Avg win bonus needs at least (%)']]},
+  {id:'himc',t:'High market cap risk',d:'Points when the recommended filters\' Min market cap is this high or higher.',f:[['hiMc','Min market cap at ($)'],['hiMcPts','Points']]},
+  {id:'lowpnl',t:'Low profit in filters',d:'Points when the total profit inside the recommended filters is under this many SOL.',f:[['lowPnl','Under (SOL)'],['lowPnlPts','Points']]},
+  {id:'prove',t:'Filters prove it',d:'Drops the Overall win rate penalty when the trades inside the recommended filters have at least this win rate, this average win, and an average loss smaller than this.',f:[['provN','Min trades in filters'],['provWin','Win rate at least (%)'],['provAvgW','Avg win at least (%)'],['provAvgL','Avg loss under (%)']]},
   {id:'edge',t:'Filters make the difference',d:'Bonus when the wallet makes far more profit inside the recommended filters than without them (losing overall but profitable in the filters counts as the biggest jump).',f:[['edgeN','Min trades in filters'],['edgeMin','Min profit in filters (SOL)'],['edgeX1','At (× the no-filter profit)'],['edgePts1','Points'],['edgeX2','Bigger at (×)'],['edgeWinUp','and win rate up (pts)'],['edgePts2','Points']]},
   {id:'weak',t:'Weak filter ranges',d:'Market-cap or buy-size ranges at the edge of the filters that win less than this are cut.',f:[['weakWin','Cut under (% win)']]}];
 function scRenderUI(){
@@ -719,7 +768,7 @@ function gmPublish(A){if(!gmStore||!CUR)return;const o=A.o,[g,col]=gradeOf(A.bes
   const {tokens,devN}=gmTokensOf(A.trades,o,A.best);
   const f=A.best,ref=CUR.ref||CUR.pulled,cf=f?cmpStats(A.keptList,o,ref):null,ca=cmpStats(A.U,o,ref);
   const warn=A.adj.parts.filter(p=>p[0]<0).sort((a,b)=>a[0]-b[0]).slice(0,4).map(p=>p[1]);
-  gmSet({['gm:'+CUR.wallet]:{w:CUR.wallet,at:Date.now(),score:A.score,grade:A.best?g:'No reliable filter yet',col,
+  gmSet({['gm:'+CUR.wallet]:{w:CUR.wallet,at:Date.now(),score:A.score,grade:A.spam?'Spam bot':A.best?g:'No reliable filter yet',col,spam:!!A.spam,
     filters:gmFilters(f),
     f:cf?{n:cf.n,win:cf.win,pnl:cf.pnl}:null,a:ca?{n:ca.n,win:ca.win,pnl:ca.pnl}:null,warn,winMin:SC().on.winmin?SC().winMin:0,dev:{n:devN,off:!!o.noDev},tokens}});
   gmTrim();
@@ -727,11 +776,13 @@ function gmPublish(A){if(!gmStore||!CUR)return;const o=A.o,[g,col]=gradeOf(A.bes
 function gmPublishLite(w,s){if(!gmStore||!s||s.score==null)return; // Top traders / Automatic scores: score, filters and token labels from the quick pull
   chrome.storage.local.get('gm:'+w,r=>{const old=r&&r['gm:'+w];if(old&&old.tokens&&!old.lite&&old.at>Date.now()-6e5)return; // a full analysis from the last 10 minutes stays
     const [g,col]=gradeOf(s.reliable?s.score:null),G=s._gm;
-    gmSet({['gm:'+w]:{w,at:Date.now(),score:s.score,grade:s.reliable?g:'No reliable filter yet',col,lite:true,warn:(s.parts||[]).filter(p=>p[0]<0).sort((a,b)=>a[0]-b[0]).slice(0,4).map(p=>p[1]),f:s.n?{n:s.n,win:(s.win??0)/100,pnl:s.pnl}:null,a:s.all?{n:s.all,win:s.allWin,pnl:s.allPnl}:null,
+    gmSet({['gm:'+w]:{w,at:Date.now(),score:s.score,grade:s.spam?'Spam bot':s.reliable?g:'No reliable filter yet',col,spam:!!s.spam,lite:true,warn:(s.parts||[]).filter(p=>p[0]<0).sort((a,b)=>a[0]-b[0]).slice(0,4).map(p=>p[1]),f:s.n?{n:s.n,win:(s.win??0)/100,pnl:s.pnl}:null,a:s.all?{n:s.all,win:s.allWin,pnl:s.allPnl}:null,
       winMin:SC().on.winmin?SC().winMin:0,filters:G?G.filters:(old&&old.filters)||null,dev:G?{n:G.devN,off:false}:(old&&old.dev)||null,tokens:G?G.tokens:(old&&old.tokens)||null}});gmTrim()})}
 let gmTrimT=0;function gmTrim(){clearTimeout(gmTrimT);gmTrimT=setTimeout(()=>{if(!gmStore)return;chrome.storage.local.get(null,all=>{const ks=Object.keys(all).filter(k=>k.startsWith('gm:')&&all[k]&&all[k].w).sort((a,b)=>(all[b].at||0)-(all[a].at||0));if(ks.length>300)chrome.storage.local.remove(ks.slice(300))})},2000)}
 $('gmgn').checked=SET.gmgn!==false;gmSet({'gm:on':SET.gmgn!==false});
 $('gmgn').addEventListener('change',()=>{SET.gmgn=$('gmgn').checked;saveSet();gmSet({'gm:on':SET.gmgn})});
+$('gmmaker').checked=SET.gmmaker===true;gmSet({'gm:maker':SET.gmmaker===true});
+$('gmmaker').addEventListener('change',()=>{SET.gmmaker=$('gmmaker').checked;saveSet();gmSet({'gm:maker':SET.gmmaker})});
 // "Analyze" pressed on a GMGN page: score that wallet here
 function gmTake(q){if(!q||Date.now()-q.at>15000||!isAddr(q.w)||$('go').disabled||WB.run)return;gmStore.remove('gm:req');showView('wallet');$('addr').value=q.w;score(q.w,!!histIndex()[q.w]);gmSet({'gm:ack':{w:q.w,at:Date.now()}})}
 if(gmStore&&chrome.storage.onChanged)chrome.storage.onChanged.addListener((ch,area)=>{const r=ch['gm:req'];if(area!=='local'||!r||!r.newValue)return;gmTake(r.newValue)});

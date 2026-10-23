@@ -50,8 +50,9 @@ function scoreOf(raw,px,wallet,buys7,est,ref,trades7){
   const U=recent(tr,o).filter(t=>adjRet(t,o)!==null);if(!U.length)return null;
   const base=summarize(U,o),{best:b0}=optimize(U,o),{best}=trimWeakEdges(b0,U,o),k=best?summarize(U.filter(t=>inF(t,best)),o):base;
   const inside=best?U.filter(t=>inF(t,best)):U,rs=rsOf(inside,o);
-  const win=Math.round(k.win*100),hold=avgHoldOf(U),p7=pnl7Of(recent(tr,{...o,offPlat:[]}),ref,px||150),adj=adjustScore(win,buys7,est,hold,p7,k.n>=SC().perfectN&&k.win===1?k.n:0,k.n,fastShareOf(U),rs,trades7,formOf(U,inside,o,ref));
+  const win=Math.round(k.win*100),hold=avgHoldOf(U),p7=pnl7Of(recent(tr,{...o,offPlat:[]}),ref,px||150),adj=adjustScore(win,buys7,est,hold,p7,k.n>=SC().perfectN&&k.win===1?k.n:0,k.n,fastShareOf(U),rs,trades7,formOf(U,inside,o,ref,best));
   const out={rv:rulesV(),trades7,score:adj.score,win,parts:adj.parts,perfect:adj.perfect||0,reliable:!!best,n:k.n,all:U.length,pnl:k.pnl,hold,buys7,rs:rs?{rt:rs.rt,heavy:rs.heavy,spN:rs.spN,checked:rs.checked,pot:rs.pot}:null,allPnl:base.pnl,allWin:base.win,p7usd:p7?p7.totUsd:null,p7days:p7?p7.days:0,p7pos:p7?p7.pos:0};
+  const sp=spamOf(wallet);if(sp){out.parts=[[-out.score,spamLab(sp)],...out.parts];out.score=0;out.perfect=0;out.spam=true}
   // GMGN labels for this wallet's tokens: kept off the saved score (not stored), handed to gmPublishLite
   try{const G=gmTokensOf(tr,o,best);Object.defineProperty(out,'_gm',{value:{tokens:G.tokens,devN:G.devN,filters:gmFilters(best)},enumerable:false})}catch(e){}
   return out;
@@ -64,7 +65,7 @@ async function rsCheck(raw,px,wallet,key,max,onp){
   if(!max||!raw.length)return 0;const o=opts(),tr=hydrate(raw,px,o);
   const U=recent(tr,o).filter(t=>adjRet(t,o)!==null);if(!U.length)return 0;
   const {best:b0}=optimize(U,o),{best}=trimWeakEdges(b0,U,o);
-  const list=(best?U.filter(t=>inF(t,best)):U).filter(t=>t.pool&&t.pxIn).sort((a,b)=>b.t-a.t).slice(0,max).filter(t=>!oppGet(t));
+  const list=(best?U.filter(t=>inF(t,best)):[]).filter(t=>t.pool&&t.pxIn) // only In Filter tokens; no filters, nothing to check.sort((a,b)=>b.t-a.t).slice(0,max).filter(t=>!oppGet(t));
   let credits=0,next=0,done=0,fatal=null;
   const worker=async()=>{while(!fatal&&next<list.length){const t=list[next++];try{const v=await checkToken(t,key,wallet,true);credits+=v.credits;oppPut(t,v)}catch(e){if(/key/i.test(e.message))fatal=e}done++;if(onp)onp(done,list.length)}};
   await Promise.all(Array.from({length:Math.min(3,list.length)},worker));if(fatal)throw fatal;return credits;
@@ -86,6 +87,14 @@ function ttRefreshStale(addrs){
     ttRefreshing=false;try{if(TT.res)ttRender()}catch(e){}try{msRender()}catch(e){}})();
 }
 
+/* ---------- scan progress: bar, time left and a Stop button while a token's trades are read ---------- */
+const TTP={t0:0};
+function ttProg(on){$('ttprog').hidden=!on;if(on){TTP.t0=Date.now();TT.stop=false;$('ttscanstop').disabled=false;$('ttscanstop').textContent='Stop';ttProgSet(0,'Starting…')}}
+function ttProgSet(frac,label){const b=$('ttprogbar'),el=Date.now()-TTP.t0;b.classList.toggle('wait',!(frac>0));b.firstElementChild.style.width=Math.max(3,Math.round(frac*100))+'%';
+  const left=frac>0.02&&el>3000?el*(1-frac)/frac/1000:null;
+  $('ttprogt').innerHTML=`${Math.round(frac*100)}%${left!=null?` · about ${fmtSecs(left)} left`:''}${label?' · '+esc(label):''}`}
+$('ttscanstop').addEventListener('click',()=>{TT.stop=true;$('ttscanstop').disabled=true;$('ttscanstop').textContent='Stopping…'});
+
 /* ---------- find top traders ---------- */
 $('ttform').addEventListener('submit',async e=>{e.preventDefault();if(TT.running)return;
   const mint=mintFrom($('ttmint').value),key=getKey(),mints=mintsFrom($('ttmint').value);
@@ -94,7 +103,7 @@ $('ttform').addEventListener('submit',async e=>{e.preventDefault();if(TT.running
   if(typeof HD!=='undefined'&&HD.mode==='holders'){if(!HD.running){TT.autoLast=mint;hdRun(mint)}return}
   if(mints.length>1){ttMulti(mints,key);return}
   TT.autoLast=mint;
-  TT.running=true;$('ttgo').disabled=true;$('ttkeep').hidden=MODE!=='popup';$('ttres').hidden=true;
+  TT.running=true;$('ttgo').disabled=true;$('ttkeep').hidden=MODE!=='popup';$('ttres').hidden=true;ttProg(true);
   try{
     ttStatus('Looking up the token…');
     let meta=metaAll();
@@ -102,15 +111,15 @@ $('ttform').addEventListener('submit',async e=>{e.preventDefault();if(TT.running
       if(a){const ti=a.token_info||{};meta[mint]=[(a.content?.metadata?.symbol||'').slice(0,24),ti.supply&&ti.decimals!=null?ti.supply/Math.pow(10,ti.decimals):null,(a.content?.metadata?.name||'').slice(0,40)];try{localStorage.setItem('ff-meta',JSON.stringify(meta))}catch(x){}}}catch(x){}}
     const name=(meta[mint]&&meta[mint][0])||short(mint);
     ttStatus(`Reading ${name}'s trades…`);
-    const r=await topTraders(mint,key,+$('ttdepth').value,m=>ttStatus(m));
+    const r=await topTraders(mint,key,+$('ttdepth').value,(m,f)=>{ttStatus(m);if(f!=null)ttProgSet(f,`${name}`)},()=>TT.stop);
     TT.res={...r,traders:r.traders.slice(0,TT_DEPTH),total:r.traders.length,at:Date.now()};TT.mint=mint;TT.name=name; /* keeps the top 200 by profit; the list shows the first N that clear Min PnL */
     try{localStorage.setItem('tt-last',JSON.stringify({res:TT.res,mint,name}))}catch(x){}
     ttCredAdd(r.credits);
-    ttStatus(`Done. ${r.txs.toLocaleString()} transactions read · about ${r.credits} Helius credits.`+(r.done?'':` Stopped at your limit, so traders after ${new Date(r.last*1000).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})} aren't counted.`));
+    ttStatus(`${r.stopped?'Stopped early: showing traders from the trades read so far. ':'Done. '}${r.txs.toLocaleString()} transactions read · about ${r.credits} Helius credits.`+(r.done||r.stopped?'':` Stopped at your limit, so traders after ${new Date(r.last*1000).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})} aren't counted.`));
     ttRender();
   }catch(err){ttStatus(err.message,true)}
-  finally{TT.running=false;$('ttgo').disabled=false;$('ttkeep').hidden=true;if(TT.res)ttRender()}
-  if(TT.res&&TT.mint===mint&&$('ttauto').checked)ttScoreLeft(true); // auto-score everyone the search found
+  finally{TT.running=false;ttProg(false);$('ttgo').disabled=false;$('ttkeep').hidden=true;if(TT.res)ttRender()}
+  if(TT.res&&TT.mint===mint&&$('ttauto').checked&&!TT.stop)ttScoreLeft(true); // auto-score everyone the search found
 });
 
 /* ---------- several tokens at once: one merged list of every trader, tagged with how many of the tokens it traded ---------- */
@@ -121,12 +130,12 @@ async function ttMeta(mints,key){const meta=metaAll(),need=mints.filter(m=>!meta
   return meta}
 async function ttMulti(mints,key){
   mints=mints.slice(0,10);TT.autoLast=mints[0];TT.running=true;TT.stop=false;$('ttgo').disabled=true;$('ttkeep').hidden=MODE!=='popup';$('ttres').hidden=true;
-  $('ttstop').hidden=false;$('ttstop').textContent='Stop';
+  ttProg(true);
   const by=new Map(),per=[];let txs=0,credits=0,allDone=true,last=0;
   try{const meta=await ttMeta(mints,key);
     for(let i=0;i<mints.length&&!TT.stop;i++){const m=mints[i],sym=(meta[m]&&meta[m][0])||short(m);
       ttStatus(`Token ${i+1} of ${mints.length} · ${sym}: reading trades…`);
-      let r;try{r=await topTraders(m,key,+$('ttdepth').value,x=>ttStatus(`Token ${i+1} of ${mints.length} · ${sym}: ${x}`))}catch(err){if(/key/i.test(err.message))throw err;per.push({m,sym,err:err.message});continue}
+      let r;try{r=await topTraders(m,key,+$('ttdepth').value,(x,f)=>{ttStatus(`Token ${i+1} of ${mints.length} · ${sym}: ${x}`);ttProgSet((i+(f||0))/mints.length,`token ${i+1} of ${mints.length} · ${sym}`)},()=>TT.stop)}catch(err){if(/key/i.test(err.message))throw err;per.push({m,sym,err:err.message});continue}
       txs+=r.txs;credits+=r.credits||0;ttCredAdd(r.credits);if(!r.done){allDone=false;last=Math.max(last,r.last||0)}per.push({m,sym,n:r.traders.length});
       for(const w of r.traders){let x=by.get(w.addr);
         if(!x){x={addr:w.addr,bSol:0,sSol:0,qIn:0,qOut:0,nb:0,ns:0,realized:0,held:0,hits:[]};by.set(w.addr,x)}
@@ -139,10 +148,10 @@ async function ttMulti(mints,key){
     TT.res={traders:tr.slice(0,depth),depth,total:tr.length,txs,done:allDone,last,at:Date.now(),multiTok:per};TT.mint=mints.join(',');TT.name=name;
     try{localStorage.setItem('tt-last',JSON.stringify({res:TT.res,mint:TT.mint,name}))}catch(x){}
     const bad=per.filter(p=>p.err);
-    ttStatus(`${TT.stop?'Stopped. ':''}Done. ${per.length-bad.length} tokens · ${txs.toLocaleString()} transactions read · ${tr.length.toLocaleString()} traders · about ${credits.toLocaleString()} Helius credits.`+(bad.length?` Couldn't read: ${bad.map(p=>p.sym).join(', ')}.`:''));
+    ttStatus(`${TT.stop?'Stopped. ':''}Done. ${per.length-bad.length} tokens · ${txs.toLocaleString()} transactions read · ${tr.length.toLocaleString()} traders · about ${credits.toLocaleString()} Helius credits.`+(bad.length?` Couldn't read: ${bad.map(p=>p.sym).join(', ')}.`:'')+(TTR.autoOff?' Auto-check tokens I open on GMGN was turned off so this scan wasn\'t interrupted.':''));TTR.autoOff=false;
   }catch(err){ttStatus(err.message,true)}
-  finally{TT.running=false;$('ttgo').disabled=false;$('ttkeep').hidden=true;$('ttstop').hidden=true;if(TT.res)ttRender()}
-  if(TT.res&&TT.mint===mints.join(',')&&$('ttauto').checked)ttScoreLeft(true);
+  finally{TT.running=false;ttProg(false);$('ttgo').disabled=false;$('ttkeep').hidden=true;if(TT.res)ttRender()}
+  if(TT.res&&TT.mint===mints.join(',')&&$('ttauto').checked&&!TT.stop)ttScoreLeft(true);
 }
 
 /* ---------- list ---------- */
@@ -165,16 +174,23 @@ function ttRender(){
     :`Ranked by realized profit in SOL, from ${R.txs.toLocaleString()} trades${R.done?'':' (history cut at your limit)'}. ${R.total} wallets made trades.`;
   ttRefreshStale(V.list.map(({w})=>w.addr));
   const m=V.m,rows=V.list.map(({w,rank})=>({w,i:rank-1,s:ttScoreGet(w.addr),ok:true}));
+  // multi-wallet groups: wallets linked to each other (directly or through another wallet) share one color, in list order
+  const MC=[['Blue','#4a9eff'],['Orange','#f7931a'],['Yellow','#f0d43a'],['White','#e8e8ee'],['Pink','#ff5fa2'],['Purple','#b56cff'],['Teal','#2ed3c6'],['Lime','#a6e05a']];
+  const par={},fd=a=>{while(par[a]&&par[a]!==a)a=par[a]=par[par[a]]||par[a];return a},un=(a,b)=>{par[a]=par[a]||a;par[b]=par[b]||b;const x=fd(a),y=fd(b);if(x!==y)par[y]=x};
+  for(const t of R.traders)if(t.multi)for(const o of t.multi.with)un(t.addr,o);
+  const gc={},gOf={};let gi=0;for(const {w} of rows)if(w.multi){const g=fd(w.addr);if(!(g in gc))gc[g]=gi++;gOf[w.addr]=gc[g]}
+  const mcol=a=>{const k=gOf[a];return k==null?null:{name:MC[k%MC.length][0]+(k>=MC.length?' '+(Math.floor(k/MC.length)+1):''),hex:MC[k%MC.length][1]}};
   if(TT.sort==='score')rows.sort((a,b)=>(b.ok-a.ok)||(((b.s&&b.s.score)??-1)-((a.s&&a.s.score)??-1)));
   $('ttlist').innerHTML=rows.map(({w,i,s,ok})=>{
     const sc=!s&&!ok?`<span class="sc na" title="Realized PnL on this token is below your Min PnL">below</span>`:!s?`<button type="button" class="scb" data-w="${esc(w.addr)}" title="Pull this wallet's recent trades and score it">Score</button>`
       :s.score==null?`<span class="sc na" title="${esc(s.why||'')}">n/a</span>`
       :`<span class="sc" data-open="${esc(w.addr)}" role="button" tabindex="0" style="color:${scCol(s.score)};background:color-mix(in srgb,${scCol(s.score)} 14%,transparent)" title="Open the full analysis · ${s.reliable?`Wins ${Math.round((s.win??s.score)*s.n/100)} of ${s.n} trades in its best filters`:`No filter with enough trades; ${s.n} trades overall`}${s.parts&&s.parts.length?` · win rate ${s.win}${s.parts.map(([v,l])=>` ${v>0?'+':'−'}${Math.abs(v)} ${l}`).join(',')}`:''}">${s.score}${s.reliable?'':'*'}</span>`;
-    const tier=w.multi?' multi':s&&s.score!=null?(s.score>=100?' gold':s.score>=90?' great':''):'';
-    const mw=w.multi?`<span class="mwt" title="Trades in the same block as ${w.multi.n-1} other wallet${w.multi.n>2?'s':''} on 60%+ of its buys and sells: ${w.multi.with.map(a=>short(a)).join(', ')}">Multi-Wallet ×${w.multi.n}</span>`:'';
+    const tier=s&&s.spam?' spam':w.multi?' multi':s&&s.score!=null?(s.score>=100?' gold':s.score>=90?' great':''):'';
+    const mc=w.multi?mcol(w.addr):null;
+    const mw=w.multi?`<span class="mwt"${mc?` style="--mc:${mc.hex}"`:''} title="${mc?`${mc.name} group · `:''}Trades in the same block as ${w.multi.n-1} other wallet${w.multi.n>2?'s':''} on 60%+ of its buys and sells: ${w.multi.with.map(a=>short(a)).join(', ')}">Multi-Wallet ×${w.multi.n}</span>`:'';
     const won=w.hits?w.hits.filter(h=>h.pnl>0).length:0;
     const tk=w.hits?`<span class="tkt${won>=2?' rep':''}" title="${esc(w.hits.map(h=>`${h.sym}: ${sol(h.pnl)}${h.roi!=null?' ('+pct(h.roi)+')':''}`).join(' · '))}">${won} of ${w.toks} tokens</span>`:'';
-    return `<div class="ttr${ok?'':' low'}${tier}" data-w="${esc(w.addr)}"><span class="rk">${i+1}</span>
+    return `<div class="ttr${ok?'':' low'}${tier}" data-w="${esc(w.addr)}"${mc&&tier===' multi'?` style="--mc:${mc.hex}"`:''}><span class="rk">${i+1}</span>
       <div style="min-width:0"><a class="wa" href="https://gmgn.ai/sol/address/${encodeURIComponent(w.addr)}" target="_blank" rel="noopener" title="Open this wallet on GMGN">${esc(short(w.addr))} ↗</a>${mw}${tk}
         <div class="sub">bought ${w.bSol.toFixed(2)} · sold ${w.sSol.toFixed(2)} SOL · ${w.nb}/${w.ns} txs${w.soldFrac<0.95?` · holds ${Math.round((1-w.soldFrac)*100)}%`:''}${s&&s.score!=null?` · ${s.n} trades${s.hold!=null?' · hold '+fmtHold(s.hold):''}${s.buys7!=null?' · '+s.buys7+' buys/7d':''}`:''}</div></div>
       <div class="pnl ${cls(w.realized)}">${sol(w.realized)}<div class="sub">${w.roi!=null?pct(w.roi):''}</div></div>${sc}</div>`}).join('');
@@ -215,6 +231,9 @@ $('ttrsall').addEventListener('click',ttRsAll);
 for(const id of ['ttrs','ttrsmin'])$(id).addEventListener('input',()=>{if(id==='ttrsmin')rsMinSync($('ttrsmin').value);if(TT.res&&!TT.running)setTimeout(ttRender,0)});
 try{$('ttautors').checked=localStorage.getItem('tt-autors')==='1'}catch(e){}
 $('ttautors').addEventListener('change',()=>{try{localStorage.setItem('tt-autors',$('ttautors').checked?'1':'0')}catch(e){}});
+try{$('ttfast').checked=localStorage.getItem('tt-fast')==='1'}catch(e){}
+$('ttfast').addEventListener('change',()=>{try{localStorage.setItem('tt-fast',$('ttfast').checked?'1':'0')}catch(e){}});
+const ttWorkers=()=>$('ttfast').checked?3:2;
 $('ttscore').addEventListener('click',()=>ttScoreLeft(false));
 $('ttstop').addEventListener('click',()=>{TT.stop=true;$('ttstop').textContent='Stopping…'});
 
@@ -227,7 +246,7 @@ async function ttBatch(list,opt={}){
   TT.running=true;TT.stop=false;$('ttstop').hidden=false;$('ttstop').textContent='Stop';$('ttkeep').hidden=MODE!=='popup';
   let done=0,credits=0,next=0,fatal=null;const failed=[];const o=opts(),t0=Date.now(),rsN=opt.rs===false?0:(+$('ttrs').value||(opt.auto&&opt.rs?25:0)),pulled={};TTC.run=0;TTC.running=true;ttCredShow();
   const save=(w,res,rsc)=>ttSaveScore(w,res,rsc);
-  const label=()=>{const per=done?(Date.now()-t0)/done:4000;$('ttscore').textContent=`Scoring ${Math.min(done+1,list.length)} of ${list.length} · about ${Math.max(1,Math.round((list.length-done)*per/1000/2))}s left`;$('ttscore').disabled=true};
+  const label=()=>{const per=done?(Date.now()-t0)/done:4000;$('ttscore').textContent=`Scoring ${Math.min(done+1,list.length)} of ${list.length} · about ${Math.max(1,Math.round((list.length-done)*per/1000/ttWorkers()))}s left`;$('ttscore').disabled=true};
   // pass 1: score every wallet, two at a time (fast: no round-trip checks yet)
   const worker=async()=>{while(!TT.stop&&!fatal&&next<list.length){const w=list[next++];label();
     const row=document.querySelector(`.ttr[data-w="${w}"]`);if(row)row.classList.add('busy');
@@ -236,7 +255,7 @@ async function ttBatch(list,opt={}){
       if(!known)ttMark(w,true);Object.assign(NAMES,res.names||{});const s=save(w,res);if(s&&rsN)pulled[w]={res,s};
     }catch(err){if(/key|storage is full/i.test(err.message)){fatal=err;break}if(!/reach|busy|internet/i.test(err.message)){try{localStorage.setItem(scoreKey(w),JSON.stringify({score:null,why:err.message}))}catch(x){}}else failed.push(w)} // connection problems: leave it unscored so it can be retried
     done++;ttRender()}};
-  await Promise.all(Array.from({length:Math.min(2,list.length)},worker));
+  await Promise.all(Array.from({length:Math.min(ttWorkers(),list.length)},worker)); // 2 at a time, or 3 with "Score 3 wallets at a time"
   // Helius was busy for some wallets (e.g. another check ran at the same time): try those again, one at a time, after a short pause
   let retryLeft=[...failed];
   if(failed.length&&!TT.stop&&!fatal){ttStatus(`Helius was busy for ${failed.length} wallet${failed.length>1?'s':''}: trying again…`);await sleep(4000);
@@ -280,7 +299,10 @@ if(typeof chrome!=='undefined'&&chrome.storage&&chrome.storage.local&&chrome.run
 for(const id of ['tttrn','tttrcol'])$(id).addEventListener('input',()=>{try{localStorage.setItem('tt-tr',JSON.stringify({n:$('tttrn').value,col:$('tttrcol').value}))}catch(e){}ttTrRender()});
 try{const s=JSON.parse(localStorage.getItem('tt-tr')||'null');if(s){$('tttrn').value=s.n||5;$('tttrcol').value=s.col||'migrated'}}catch(e){}
 $('tttrgo').addEventListener('click',()=>{const d=TTR.d;if(!d||TT.running)return;const col=$('tttrcol').value,n=Math.max(1,Math.min(10,Math.floor(+$('tttrn').value)||5)),pick=(d.cols[col]||[]).slice(0,n).map(x=>x.m);
-  if(!pick.length)return;$('ttmint').value=pick.join(',');$('ttform').requestSubmit()});
+  if(!pick.length)return;
+  // a multi-token scan must not be cut short by opening another token on GMGN, so switch auto-check off (and remember it)
+  if($('ttautotok').checked){$('ttautotok').checked=false;try{localStorage.setItem('tt-autotok','0')}catch(e){}TTR.autoOff=true}
+  $('ttmint').value=pick.join(',');$('ttform').requestSubmit()});
 $('ttfromtab').addEventListener('click',()=>{$('ttmint').value=$('ttfromtab').dataset.m;$('ttfromtab').hidden=true;$('ttform').requestSubmit()});
 if(typeof chrome!=='undefined'&&chrome.tabs){chrome.tabs.onActivated.addListener(()=>{if(!$('vtt').hidden)ttCheckTab()});chrome.tabs.onUpdated.addListener((id,ch)=>{if(ch.url&&!$('vtt').hidden)ttCheckTab()})}
 

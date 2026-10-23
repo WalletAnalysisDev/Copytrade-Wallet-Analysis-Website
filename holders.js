@@ -50,7 +50,7 @@ async function hdHistory(mint,key,maxPages,onp){
       for(const r of ins)for(const s of outs){get(r).from.add(s);get(s).to.add(r)} // a transfer: tokens left one wallet and arrived in another without a trade
     }
     onp&&onp(`Reading the token's history · ${txs.toLocaleString()} transactions`);
-    token=j.result&&j.result.paginationToken;if(!token||d.length<100){done=true;break}
+    token=j.result&&j.result.paginationToken;if(!token){done=true;break} // a short page isn't the end
   }
   // same block buy and sell by one wallet (sandwich / wash pattern)
   for(const w of W.values()){const b=new Set(w.ev.filter(e=>e.endsWith('b')).map(e=>e.slice(0,-1)));w.sameBlock=new Set(w.ev.filter(e=>e.endsWith('s')&&b.has(e.slice(0,-1)))).size}

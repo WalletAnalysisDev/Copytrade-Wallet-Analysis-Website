@@ -16,10 +16,16 @@ function hydrate(raw,px,o){
     const R=a[26]||null,EV=a[29]||null,K=o.maxRounds||0,cut=!!(K&&(EV?nBuys(EV)>K:R&&R.length>K));
     if(cut){if(EV){const c=copyK(EV,K);cost=c.cost;proc=c.proc;qIn=c.qIn;qOut=c.qOut} // a bot that copies only the wallet's first K buys on this token
       else{const r=R.slice(0,K);cost=r.reduce((x,y)=>x+y[1],0);proc=r.reduce((x,y)=>x+y[2],0);qIn=r.reduce((x,y)=>x+y[3],0);qOut=r.reduce((x,y)=>x+y[4],0)}} // older saves: first K round trips
+    // never sold (any tokens that left were only sent to another wallet): nothing was realized, so it's treated as unsold
+    const noSell=!(a[7]>0);if(noSell&&qOut>0){qOut=0;proc=0}
     const sold=qIn>0?Math.min(1,qOut/qIn):1;
     let part=sold>=0.95?1:sold; // profit counts only the part that was sold, against what that part cost
     // tokens still (partly) held: value what's left at today's price, so dead bags count as the losses they are
     let mtm=null;if(sold<0.95&&cost>0){const cp=cpxGet(),p=cp[a[0]],s=cp[WSOL];if(p&&p[0]!=null&&s&&s[0]>0){mtm=Math.max(0,qIn-qOut)*p[0]/s[0];part=1}}
+    // a gain on tokens still held isn't a win yet (the wallet may never sell): today's price can only lower the result.
+    // Never sold and up at today's price: counted as unsold (your "count never-sold tokens as losses" setting decides).
+    // Partly sold: what's left counts at its cost, never more.
+    if(mtm!=null){const rem=cost*(1-sold);if(mtm>rem){if(sold<0.02){mtm=null;part=sold}else mtm=rem}}
     const buySol=cost*part,buyUsd=a[2]*part*(a[12]?cost/a[12]:1),ret=buySol>0?(proc+(mtm||0))/buySol-1:0;
     return {tok:a[0],t:a[1],buyUsd,sellUsd:a[3]*(a[13]?proc/a[13]:1),buySol,sellSol:proc,firstSol:a[5],mcap,est:a[14]>0,sold,
       sellMc:a[10]>0?a[15]/a[10]*(a[16]||o.supply):null,
@@ -50,14 +56,14 @@ function roundStudy(list,o){ // what a copy bot makes with "max buys per token" 
    but a copy bot buys a block or two later at a higher price and can't sell that fast, so for the copier it's a loss. */
 /* ---------- scoring rules: Automatic uses SC_DEF; Custom uses the numbers saved in Settings ('ws-scoring') ---------- */
 const SC_DEF={perfectN:9,cap:99, few1:-25,few2:-15, winLow:35,winLowPts:-50,winMid:40,winMidPts:-20,
-  actHi:1000,actHiPts:-40,actMid:500,actMidPts:-15,buysLow:250,buysLowPts:3, holdShort:30,holdShortPts:-5,holdLong:60,holdMax:4,
+  actHi:500,actHiPts:-50,actMid:250,actMidPts:-25,buysLow:250,buysLowPts:3, holdShort:30,holdShortPts:-5,holdLong:60,holdMax:4,
   fastSec:10,fT1:10,fP1:-5,fT2:20,fP2:-10,fT3:35,fP3:-15,fT4:50,fP4:-20, flipSec:20,flipShare:50,flipPts:-40,
   g1:100,gP1:5,g2:300,gP2:10,g3:1000,gP3:15,gP4:20,redPts:-20,redLossPts:-30,allRedPts:-50,
   spikeRise:50,sMinChecked:4,sT1:50,sP1:-10,sT2:65,sP2:-15,sT3:80,sP3:-20,sMorePts:-5, rtPct:100,rtN1:2,rP1:3,rtN2:3,rP2:5,rtN3:5,rP3:8,
   qsSec:15,qsMc:5000,qsLoss:-20,qsAnySec:5, weakWin:35,
-  allLow:25,allLowPts:-20,allMid:40,allMidPts:-10,perfAll:40, recMinN:5,recLow:30,recLowPts:-30,recMid:45,recMidPts:-10,recNone:-15, shortSec:40,shortShare:50,shortCap:60, winMin:10,
-  edgeN:10,edgeMin:2,edgeX1:3,edgePts1:10,edgeX2:5,edgeWinUp:10,edgePts2:20, winHi:50,winHiPts:15,winHiN:5, rescueN:5,rescueRed:-5,rescueAll:50};
-const SC_RULES=['perfect','few','win','act','hold','fast','flip','p7','spike','rt','qs','weak','overall','form','short','winmin','edge','winhi','rescue'];
+  allLow:25,allLowPts:-50,allMid:35,allMidPts:-30,allHi:40,allHiPts:-15,perfAll:40, recMinN:5,recLow:30,recLowPts:-30,recMid:45,recMidPts:-10,recNone:-15, shortSec:40,shortShare:50,shortCap:60, winMin:10,
+  edgeN:10,edgeMin:2,edgeX1:3,edgePts1:10,edgeX2:5,edgeWinUp:10,edgePts2:20, winHi:50,winHiPts:15,winHiN:5, rescueN:5,rescueRed:-5,rescueAll:50, betN:5,betWin:10,betPnl:10,betRoi:10,betAvg:10,betPts:5,betMaxBuys:500,betAvgMin:100,betRoiMin:50, hiMc:75000,hiMcPts:-15, lowPnl:5,lowPnlPts:-10, provWin:40,provAvgW:100,provAvgL:41,provN:5};
+const SC_RULES=['perfect','few','win','act','hold','fast','flip','p7','spike','rt','qs','weak','overall','form','short','winmin','edge','winhi','rescue','better','himc','lowpnl','prove'];
 let SC_C=null;
 function scSaved(){try{return JSON.parse(localStorage.getItem('ws-scoring')||'null')||{}}catch(e){return {}}}
 function SC(){if(SC_C)return SC_C;const s=scSaved(),custom=s.mode==='custom',v={...SC_DEF,...(custom?s.v||{}:{})},on={};
@@ -208,8 +214,8 @@ function parseTx(t,W){
       if((s[0]===W||inf.authority===W)&&d[0]!==W)mo=Math.max(mo,v);if(d[0]===W&&s[0]!==W)mi=Math.max(mi,v)}}
   return [(t.transaction.signatures||[''])[0].slice(0,20),t.blockTime,+sol.toFixed(9),tok,+mo.toFixed(9),+mi.toFixed(9),pools,null,+usd.toFixed(6)];
 }
-async function gtfa(W,key,blockTime,onp,stop){
-  const rows=[];let token=null,pages=0,txs=0,own=0;
+async function gtfa(W,key,blockTime,onp,stop,maxEmpty=60){
+  const rows=[];let token=null,pages=0,txs=0,own=0,empty=0;
   while(pages<300){
     const cfg={transactionDetails:'full',limit:100,encoding:'jsonParsed',maxSupportedTransactionVersion:1,
       filters:{status:'succeeded',tokenAccounts:'balanceChanged',blockTime}};
@@ -220,9 +226,14 @@ async function gtfa(W,key,blockTime,onp,stop){
     const d=(j.result&&j.result.data)||[];pages++;txs+=d.length;
     for(const t of d){const r=parseTx(t,W);if(r)rows.push(r);const k0=t.transaction&&t.transaction.message&&t.transaction.message.accountKeys&&t.transaction.message.accountKeys[0];if(k0&&(k0.pubkey||k0)===W)own++}
     if(d.length&&onp)onp(`${rows.length} trades, back to ${new Date(d[d.length-1].blockTime*1000).toLocaleDateString(undefined,{month:'short',day:'numeric'})}`);
+    else if(!d.length&&onp&&pages>2)onp(`${rows.length} trades · skipping failed transactions (page ${pages})`);
     token=j.result&&j.result.paginationToken;
-    if(!token||d.length<100)return {rows,pages,txs,own,done:true}; // a short page is the last one
-    if(stop&&stop(rows,pages))return {rows,pages,txs,own,done:false};
+    // only a missing token means the end: a short or even empty page can come back while more exists (Helius drops failed
+    // transactions after reading them, so a bot wallet with lots of failed sends returns pages with few or no trades)
+    empty=d.length?0:empty+1;
+    if(!token)return {rows,pages,txs,own,done:true};
+    if(empty>=maxEmpty)return {rows,pages,txs,own,done:false}; // a long run of empty pages: stop rather than spend more credits
+    if(stop&&stop(rows,pages,txs))return {rows,pages,txs,own,done:false};
   }
   return {rows,pages,txs,own,done:false};
 }
@@ -302,19 +313,30 @@ async function poolTicks(P,mint,t0,t1,key,maxPages,solUsd){ // every pool trade 
     const d=(j.result&&j.result.data)||[];pages++;
     for(const t of d){const p=poolTxPrice(t,P,mint,solUsd);if(p&&p>hi){hi=p;hiT=t.blockTime}last=t.blockTime}
     token=j.result&&j.result.paginationToken;
-    if(!token||d.length<100){more=false;break}
+    if(!token){more=false;break} // only a missing token is the end
     more=true;
   }
   return {hi,hiT,last,more,pages};
 }
-let gtNext=0,gtChain=Promise.resolve();
-/* today's price of tokens a wallet still holds (GeckoTerminal, free, 30 tokens a call), kept 15 minutes */
+let gtNext=0,dsNext=0,gtChain=Promise.resolve();
+/* today's price of tokens a wallet still holds (DexScreener, then GeckoTerminal; free, 30 tokens a call), kept 15 minutes */
 const CPX_TTL=15*60e3;
 function cpxGet(){if(cpxGet.c&&Date.now()-cpxGet.t<5000)return cpxGet.c;try{cpxGet.c=JSON.parse(localStorage.getItem('ff-curpx')||'{}')}catch(e){cpxGet.c={}}cpxGet.t=Date.now();return cpxGet.c}
 async function curPrices(mints){
   const c=cpxGet(),now=Date.now(),need=[...new Set(mints)].filter(m=>!c[m]||now-c[m][1]>CPX_TTL);if(!need.length)return 0;
   if(!c[WSOL]||now-c[WSOL][1]>CPX_TTL)need.push(WSOL);let calls=0;const upd={};
-  for(let i=0;i<need.length;i+=30){const ids=need.slice(i,i+30);
+  // DexScreener first (300 calls a minute, so batch scoring doesn't queue up), GeckoTerminal for any it doesn't list
+  const miss=[];
+  for(let i=0;i<need.length;i+=30){const ids=need.slice(i,i+30);let ok=false;
+    for(let a=0;a<2&&!ok;a++){const wait=dsNext-Date.now();if(wait>0)await sleep(wait);dsNext=Date.now()+250;
+      let r;try{r=await fetch('https://api.dexscreener.com/tokens/v1/solana/'+ids.join(','))}catch(e){await sleep(1000);continue}
+      if(r.status===429){dsNext=Date.now()+5000;continue}if(!r.ok)break;ok=true;calls++;
+      let arr=[];try{arr=await r.json()}catch(e){}if(!Array.isArray(arr))arr=(arr&&arr.pairs)||[];
+      const best={};for(const p of arr){const m=p&&p.baseToken&&p.baseToken.address,u=p&&p.priceUsd!=null?+p.priceUsd:null,l=(p&&p.liquidity&&p.liquidity.usd)||0;
+        if(!m||u==null||!isFinite(u)||!ids.includes(m))continue;if(!best[m]||l>best[m][1])best[m]=[u,l]}
+      for(const m of ids){if(best[m])c[m]=upd[m]=[best[m][0],now];else miss.push(m)}}
+    if(!ok)miss.push(...ids)}
+  for(let i=0;i<miss.length;i+=30){const ids=miss.slice(i,i+30);
     for(let a=0;a<3;a++){const wait=gtNext-Date.now();if(wait>0)await sleep(wait);gtNext=Date.now()+2200;
       let r;try{r=await fetch('https://api.geckoterminal.com/api/v2/networks/solana/tokens/multi/'+ids.join(','))}catch(e){await sleep(2000);continue}
       if(r.status===429){gtNext=Date.now()+15000;continue}if(!r.ok)break;calls++;
@@ -408,6 +430,19 @@ async function migrateOld(){ // wallets pulled before history existed
 // wallets whose transactions are mostly sent by other wallets (tokens bought elsewhere and delivered here)
 function receiverNote(res){if(res.ownShare==null||res.ownShare>=0.25)return '';
   return `This wallet rarely trades itself: only ${Math.round(res.ownShare*100)}% of its recent transactions were sent by it. Most are tokens other wallets bought and sent here, so a copy bot following it sees few or no buys.`+(res.raw.length&&res.wanted&&res.raw.length<res.wanted?` Found ${res.raw.length} of the ${res.wanted} tokens you asked for.`:'')}
+/* ---------- spam bots: most of the wallet's transactions fail (snipers firing many sends per trade) ----------
+   Helius leaves failed transactions out, so their trades can't be read fully, and a copy bot can't follow them anyway:
+   they score 0. Checked with one request (its last 1,000 transactions), at most every 6 hours. */
+const SPAM_FAIL=0.8;
+function spamAll(){try{return JSON.parse(localStorage.getItem('ff-spam')||'{}')}catch(e){return {}}}
+function spamOf(w){const v=spamAll()[w];return v&&v.share>=SPAM_FAIL?v:null}
+const spamLab=v=>`spam bot: ${Math.round(v.share*100)}% of its last ${v.n.toLocaleString()} transactions failed, so its trades can't be read fully or copied`;
+async function spamCheck(W,key){const m=spamAll(),old=m[W];if(old&&Date.now()/1000-old.at<6*3600)return old;
+  const j=await getJSON(RPC+key,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:'s',method:'getSignaturesForAddress',params:[W,{limit:1000}]})});
+  const L=(j&&j.result)||[];if(L.length<200)return old||null; // too few transactions to judge
+  const v={share:L.filter(s=>s.err).length/L.length,n:L.length,at:Math.floor(Date.now()/1000)};m[W]=v;
+  const ks=Object.keys(m);if(ks.length>3000)ks.sort((a,b)=>m[a].at-m[b].at).slice(0,ks.length-3000).forEach(k=>delete m[k]);
+  try{localStorage.setItem('ff-spam',JSON.stringify(m))}catch(e){}return v}
 const MAX_AGE_D=31;
 async function pullWallet(W,key,days,onp,lastN=0,offline=false,lite=false){ // lite: batch scoring, skips the DEV check and limits transfer lookups
   // only trades from the last MAX_AGE_D days are ever pulled or scored: a wallet back from a long break is judged on what
@@ -417,21 +452,36 @@ async function pullWallet(W,key,days,onp,lastN=0,offline=false,lite=false){ // l
   if(offline&&!c)throw new Error('This wallet isn\'t in your history yet. Pull it first.');
   if(!c)c={tx:[],newest:0,oldest:now+1,complete:false};
   const merge=rows=>{const seen=new Set(c.tx.map(r=>r[0]));for(const r of rows)if(!seen.has(r[0])){c.tx.push(r);seen.add(r[0])}};
+  // the spam-bot check runs alongside the trade pull (one quick request); if it finds a spam bot, paging stops early:
+  // its score is 0 anyway, and its mostly-empty pages would only cost time and credits
+  const SP={is:false},spamP=offline?null:spamCheck(W,key).then(v=>{SP.is=!!(v&&v.share>=SPAM_FAIL)}).catch(()=>{}),spamStop=()=>SP.is;
+  const ME=lite?25:60; // batch scoring gives up sooner on long runs of empty pages
   if(!offline&&c.newest){ // only what happened since the last pull
     onp&&onp('Checking for new trades');
-    const r=await gtfa(W,key,{gt:Math.max(c.newest-180,ageCut)},onp);pages+=r.pages;fresh+=r.txs;merge(r.rows);own+=r.own;ownOf+=r.txs; // small overlap: late-finalized trades
+    const from=Math.max(c.newest-180,ageCut);
+    const r=await gtfa(W,key,{gt:from},onp,spamStop,ME);pages+=r.pages;fresh+=r.txs;merge(r.rows);own+=r.own;ownOf+=r.txs; // small overlap: late-finalized trades
+    // stopped before reaching the last pull (a bot wallet's long run of failed sends): remember the hole and fill it next time
+    if(!r.done){const lo=r.rows.length?Math.min(...r.rows.map(x=>x[1])):now;c.hole={gt:Math.min(from,(c.hole&&c.hole.gt)||from),lt:Math.max(lo,(c.hole&&c.hole.lt)||0)}}
+  }
+  if(!offline&&c.hole){ // a hole left by an earlier pull that stopped early
+    if(c.hole.lt<=ageCut)delete c.hole;
+    else{onp&&onp('Filling in trades missed last time');
+      const r=await gtfa(W,key,{gt:Math.max(c.hole.gt,ageCut),lt:c.hole.lt},onp,spamStop,ME);pages+=r.pages;fresh+=r.txs;merge(r.rows);own+=r.own;ownOf+=r.txs;
+      if(r.done)delete c.hole;else if(r.rows.length)c.hole.lt=Math.min(...r.rows.map(x=>x[1]))}
   }
   if(!offline&&!c.complete){ // older history, only if the cache doesn't reach back far enough
     if(lastN){
-      if(c.oldest>ageCut&&boughtSet(c.tx).size<lastN&&!(c.thinN&&lastN<=c.thinN)){ // thinN: already searched back and found too few buys
+      if(c.oldest>ageCut&&boughtSet(c.tx).size<lastN&&!(c.thinN&&c.thinV===2&&lastN<=c.thinN)){ // thinN: already searched back and found too few buys
         let extra=0;const have=boughtSet(c.tx);
-        const r=await gtfa(W,key,{lt:c.oldest,gte:ageCut},onp,(rows,pg)=>{const s=new Set(have);for(const m of boughtSet(rows))s.add(m);
+        const r=await gtfa(W,key,{lt:c.oldest,gte:ageCut},onp,(rows,pg,got)=>{if(SP.is)return true;const s=new Set(have);for(const m of boughtSet(rows))s.add(m);
           if(s.size>=lastN)return extra++>=1;
-          return pg>=30||(pg>=8&&s.size<Math.max(3,pg*lastN/60)); // stop paging: at most 3,000 transactions, or early when this wallet hardly buys anything itself
-        });own+=r.own;ownOf+=r.txs;
+          // stop paging: at most 3,000 transactions, or early when this wallet hardly buys anything itself. Counted in transactions
+          // returned, not pages: a bot wallet's pages are mostly empty (its failed sends are left out), and those aren't the wallet trading
+          const n=Math.max(1,got/100);return pg>=(lite?60:200)||n>=30||(n>=8&&s.size<Math.max(3,n*lastN/60));
+        },ME);own+=r.own;ownOf+=r.txs;
         pages+=r.pages;fresh+=r.txs;merge(r.rows);
         c.oldest=r.rows.length?Math.min(c.oldest,...r.rows.map(x=>x[1])):c.oldest;if(r.done)c.oldest=Math.min(c.oldest,ageCut); // reached the 31-day limit
-        else if(boughtSet(c.tx).size<lastN)c.thinN=lastN;
+        else if(boughtSet(c.tx).size<lastN&&!SP.is){c.thinN=lastN;c.thinV=2}
       }
     }else if(cutoff<c.oldest){
       const r=await gtfa(W,key,{lt:c.oldest,gte:cutoff},onp);pages+=r.pages;fresh+=r.txs;merge(r.rows);
@@ -448,13 +498,17 @@ async function pullWallet(W,key,days,onp,lastN=0,offline=false,lite=false){ // l
   // token names and supply, cached across wallets
   let meta={};try{meta=JSON.parse(localStorage.getItem('ff-meta')||'{}')}catch(e){}
   const need=[...new Set(use.flatMap(r=>Object.keys(r[3])))].filter(m=>!meta[m]||meta[m].length<3);
-  if(need.length&&!offline){onp&&onp('Looking up token names');
+  // token names run at the same time as the SOL prices below (both are needed only at the end)
+  const metaP=!(need.length&&!offline)?null:(async()=>{onp&&onp('Looking up token names');
     for(let i=0;i<need.length;i+=500){
       const jj=await getJSON(RPC+key,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:'m',method:'getAssetBatch',params:{ids:need.slice(i,i+500)}})});
       pages+=1;for(const a of (jj.result||[])){if(!a)continue;const ti=a.token_info||{};meta[a.id]=[(a.content?.metadata?.symbol||ti.symbol||'').slice(0,24),ti.supply&&ti.decimals!=null?ti.supply/Math.pow(10,ti.decimals):null,(a.content?.metadata?.name||'').slice(0,40)]}}
-    try{localStorage.setItem('ff-meta',JSON.stringify(meta))}catch(e){}}
+    try{localStorage.setItem('ff-meta',JSON.stringify(meta))}catch(e){}})().catch(e=>{if(/key/i.test(e.message))throw e});
   onp&&onp('Getting SOL prices');
   let px=[];const first=use.length?Math.min(...use.map(r=>r[1])):0;
+  // SOL's hourly prices are the same for every wallet: one shared copy, so batch scoring doesn't fetch them again per wallet
+  {let g=null;try{g=JSON.parse(localStorage.getItem('ff-solpx')||'null')}catch(e){}
+    if(Array.isArray(g)&&g.length&&g[0][0]<=first-3600&&(!c.px||!c.px.length||g[g.length-1][0]>c.px[c.px.length-1][0]))c.px=g}
   if(c.px&&c.px.length&&c.px[0][0]<=first-3600&&c.px[c.px.length-1][0]>=(offline?(c.newest||now)-7200:now-7200))px=c.px; // saved prices cover it
   else if(use.length){ // hourly SOL prices from the oldest trade up to now (1,000 hours per request). It used to stop after
     // 3 requests (~4 months), so wallets with older trades got stale SOL prices on recent ones and market caps came out too high
@@ -462,7 +516,9 @@ async function pullWallet(W,key,days,onp,lastN=0,offline=false,lite=false){ // l
     const keep=c.px&&c.px.length&&c.px[0][0]<=first-3600?c.px:null;if(keep){px=keep.slice();start=(keep[keep.length-1][0]+3600)*1000} // saved prices reach back far enough: only add the newer hours
     for(let k=0;k<13;k++){let kl=null;try{kl=await getJSON('https://api.binance.us/api/v3/klines?symbol=SOLUSDT&interval=1h&limit=1000&startTime='+start)}catch(e){}
       if(!Array.isArray(kl)||!kl.length)break;px=px.concat(kl.map(x=>[Math.floor(x[0]/1000),+x[4]]));if(kl.length<1000)break;start=kl[kl.length-1][0]+3600e3}
-    if(px.length){c.px=px;await cachePut(W,c)}
+    if(px.length){c.px=px;await cachePut(W,c);
+      try{let g=[];try{g=JSON.parse(localStorage.getItem('ff-solpx')||'[]')||[]}catch(e){}const join=g.length&&g[g.length-1][0]>=px[0][0]-3600&&g[0][0]<=px[0][0],mp=new Map(join?g:[]);for(const p of px)mp.set(p[0],p[1]); // only joined when the two have no gap between them
+        const keep=[...mp].filter(p=>p[0]>=now-(MAX_AGE_D+5)*86400).sort((x,y)=>x[0]-y[0]);lsPut('ff-solpx',JSON.stringify(keep))}catch(e){}}
     else if(c.px)px=c.px}
   const pt=px.map(p=>p[0]);
   const solUsd=ts=>{if(!px.length)return 150;let lo=0,hi=pt.length-1;if(ts<pt[0])return px[0][1];while(lo<hi){const m=(lo+hi+1)>>1;if(pt[m]<=ts)lo=m;else hi=m-1}return px[lo][1]};
@@ -509,14 +565,17 @@ async function pullWallet(W,key,days,onp,lastN=0,offline=false,lite=false){ // l
       rest.forEach((m,i)=>o[m]=sg*(allK&&sum>0?left*kn[i]/sum:left/rest.length));r[9]=o}
     else if(est.every(v=>v!=null)){const sum=est.reduce((a,v)=>a+v,0);if(sum>0){const o={};ms.forEach((m,i)=>o[m]=sg*tot*est[i]/sum);r[9]=o}}}
   if(todo.length||swaps.length||multi.some(r=>r[9]))await cachePut(W,c);
+  if(metaP)await metaP;
   const out=convertPull(use.filter(r=>Object.keys(r[3]).some(m=>analyzed.has(m))&&!(isSwapRow(r)&&!r[9])).map(r=>{const e=eff(r);return [r[1],e.sol,r[3],e.mo,e.mi,r[6],r[7],r[9]]}),meta,px);
-  {try{await curPrices(out.raw.filter(a=>{const qi=(a[9]||0)+(a[24]||0),qo=(a[10]||0)+(a[25]||0);return qi>0&&qo/qi<0.95}).map(a=>a[0]))}catch(e){}} // value tokens still held at today's price
-  if(!offline){try{await platLookup(out.raw.map(r=>r[27]),key)}catch(e){}} // about 1 credit per 100 tokens
+  // today's prices for tokens still held, and which platform each pool is on: both at once
+  await Promise.all([curPrices(out.raw.filter(a=>{const qi=(a[9]||0)+(a[24]||0),qo=(a[10]||0)+(a[25]||0);return qi>0&&qo/qi<0.95}).map(a=>a[0])).catch(()=>{}),
+    offline?null:platLookup(out.raw.map(r=>r[27]),key).catch(()=>{})]); // platforms: about 1 credit per 100 tokens
   // buys in the 7 days before the last pull (scaled up when the saved history covers less than 7 days)
   {const ref=c.pulled||now,wk=ref-7*86400;let b7=0,s7=0;for(const r of c.tx){if(r[1]<wk)continue;const ms=Object.keys(r[3]);if(ms.some(m=>isBuyRow(r,m)))b7++;else if(ms.some(m=>isSellRow(r,m)))s7++}
    const from=c.complete?wk:Math.max(wk,c.oldest||wk),span=ref-from;out.buys7est=span<7*86400-600;const k=out.buys7est?7*86400/Math.max(span,3600):1;out.buys7=Math.round(b7*k);out.trades7=Math.round((b7+s7)*k)} // trades7: buys + sells, like GMGN's 7D TXs
   out.ref=c.pulled||now; // the time the 7-day figures are measured back from
-  out.credits=pages*10;out.ownShare=ownOf>=50?own/ownOf:null;out.wanted=lastN;out.newTx=fresh;out.cachedTx=c.tx.length;out.oldest=c.oldest;out.complete=!!c.complete;out.pulled=c.pulled||now;
+  if(spamP){await spamP;pages+=0.1} // about 1 credit
+  out.credits=Math.round(pages*10);out.ownShare=ownOf>=50?own/ownOf:null;out.wanted=lastN;out.newTx=fresh;out.cachedTx=c.tx.length;out.oldest=c.oldest;out.complete=!!c.complete;out.pulled=c.pulled||now;
   return out;
 }
 
