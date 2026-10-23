@@ -487,3 +487,13 @@ header{position:relative;z-index:56}
 .cmph .wdh{color:#6aa6ff}.cmpr b.wd:not(.up):not(.down){color:#6aa6ff}
 .bignote .linkbtn{color:#6aa6ff;font-weight:600;text-decoration:underline;padding:0;background:none;border:0;cursor:pointer;font:inherit}
 .bignote .run{display:block;margin-top:8px}
+
+/* scan tokens from the GMGN Trenches page */
+.tttrench{display:flex;flex-direction:column;gap:5px;margin:6px 0}
+.tttrench .hint{display:flex;flex-wrap:wrap;align-items:center;gap:5px}
+.tttrench input{width:46px}
+
+/* card titles with a switch (e.g. Top traders · several tokens): the title wraps, the switch keeps its size */
+.ctitle>span:first-child{flex:1 1 auto;min-width:0;overflow-wrap:anywhere}
+.ctitle .seg{flex:0 0 auto;align-self:flex-start;white-space:nowrap}
+.ctitle .seg button{white-space:nowrap}

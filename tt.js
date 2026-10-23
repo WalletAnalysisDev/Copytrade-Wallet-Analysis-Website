@@ -178,18 +178,22 @@ function ttRender(){
       <div style="min-width:0"><a class="wa" href="https://gmgn.ai/sol/address/${encodeURIComponent(w.addr)}" target="_blank" rel="noopener" title="Open this wallet on GMGN">${esc(short(w.addr))} ↗</a>${mw}${tk}
         <div class="sub">bought ${w.bSol.toFixed(2)} · sold ${w.sSol.toFixed(2)} SOL · ${w.nb}/${w.ns} txs${w.soldFrac<0.95?` · holds ${Math.round((1-w.soldFrac)*100)}%`:''}${s&&s.score!=null?` · ${s.n} trades${s.hold!=null?' · hold '+fmtHold(s.hold):''}${s.buys7!=null?' · '+s.buys7+' buys/7d':''}`:''}</div></div>
       <div class="pnl ${cls(w.realized)}">${sol(w.realized)}<div class="sub">${w.roi!=null?pct(w.roi):''}</div></div>${sc}</div>`}).join('');
-  const left=V.list.filter(({w})=>!ttScoreGet(w.addr)).length;
+  const nw=V.list.filter(({w})=>!ttScoreGet(w.addr)).length,old=V.list.filter(({w})=>ttScoreGet(w.addr)&&ttStale(w.addr)).length,left=nw+old;
   {const rt=TT.running?[]:ttRsTodo(),b=$('ttrsall'),N=+$('ttrs').value||25;b.hidden=TT.running?!b.textContent.startsWith('Checking'):!rt.length;b.disabled=TT.running;
     if(!TT.running)b.textContent=`Check all spikes & round-trips · ${rt.length} wallet${rt.length===1?'':'s'}${+SET.rsmin?` (${+SET.rsmin}+)`:''} · ~${(rt.length*N*20).toLocaleString()} cr`}
   $('ttscore').hidden=TT.running?false:!left;$('ttscore').disabled=TT.running;
   const mb=ttMaxB(),crit=[m!=null?`${ttMinTxt(m)} or more`:null,mb!=null?`${mb} buy${mb>1?'s':''} or fewer`:null].filter(Boolean).join(', '),cut=m!=null||mb!=null;
-  if(!TT.running)$('ttscore').textContent=`Score ${left} ${cut?`at ${crit}`:left===V.list.length?'(all)':'left'} · about ${(left*100).toLocaleString()} credits`;
+  if(!TT.running)$('ttscore').textContent=left?`Score ${left} ${cut?`at ${crit}`:left===V.list.length?'(all)':'left'}${old?` (${old} to refresh with new trades)`:''} · about ${(nw*100+old*20).toLocaleString()} credits`:'All scored and up to date';
   $('ttsub').textContent+=cut?(V.list.length>=V.N?` Showing the first ${V.N} at ${crit} (checked the top ${V.looked}; skipped ${V.looked-V.list.length}).`:` Only ${V.list.length} match ${crit} in the top ${V.looked} traders${V.looked>=(R.depth||TT_DEPTH)?` (search stops at ${R.depth||TT_DEPTH})`:''}.`):'';
 }
 $('ttlist').addEventListener('click',e=>{const o=e.target.closest('[data-open]'),b=e.target.closest('.scb');
   if(o){const w=o.dataset.open;showView('wallet');$('addr').value=w;score(w,!!histIndex()[w])}
   if(b&&!TT.running)ttBatch([b.dataset.w])});
-function ttScoreLeft(auto){if(TT.res&&!TT.running){const l=ttView(TT.res).list.map(({w})=>w).filter(w=>!ttScoreGet(w.addr)).map(w=>w.addr),rs=auto===true?$('ttautors').checked:true;
+// a wallet needs (re)scoring when it has no score yet, or its saved trades are over 30 minutes old: the re-score fetches only the new trades
+const TT_STALE=1800;
+const ttStale=a=>{const p=(histIndex()[a]||{}).pulled;return !p||Date.now()/1000-p>TT_STALE};
+const ttNeeds=a=>!ttScoreGet(a)||ttStale(a);
+function ttScoreLeft(auto){if(TT.res&&!TT.running){const l=ttView(TT.res).list.map(({w})=>w).filter(w=>ttNeeds(w.addr)).map(w=>w.addr),rs=auto===true?$('ttautors').checked:true;
   // wallets scored in an earlier search were skipped here, so they never got the check: with "Include round-trips & spikes" on, check them too
   const after=()=>{if(auto===true&&rs&&!TT.stop&&ttRsTodo().length)ttRsAll()};
   if(l.length)ttBatch(l,{rs,auto:auto===true}).then(after);else after()}}
@@ -262,6 +266,21 @@ async function ttCheckTab(){
     if(m&&$('ttautotok').checked&&m[1]!==TT.autoLast&&!TT.running&&!(typeof HD!=='undefined'&&HD.running)){b.hidden=true;$('ttmint').value=m[1];$('ttform').requestSubmit();return} // auto-check the token just opened
     if(m&&m[1]!==TT.mint){b.hidden=false;b.dataset.m=m[1];b.innerHTML=`Use the token from this tab: <b>${esc(short(m[1]))}</b>`;if(!$('ttmint').value)$('ttmint').value=m[1]}else b.hidden=true}catch(e){}
 }
+/* ---------- tokens on screen on the GMGN Trenches page (gm.js shares them): scan the first X of a column ---------- */
+const TTR={d:null};
+function ttTrRender(){const b=$('tttrench'),d=TTR.d;if(!b)return;const fresh=d&&Date.now()-d.at<5*60e3,col=$('tttrcol').value,list=fresh&&d.cols&&d.cols[col]||[];
+  b.hidden=!fresh||!Object.values(d.cols||{}).some(l=>l.length);if(b.hidden)return;
+  const n=Math.max(1,Math.min(10,Math.floor(+$('tttrn').value)||5)),pick=list.slice(0,n),names={migrated:'Migrated',almost:'Almost bonded','new':'New'};
+  $('tttrgo').disabled=!pick.length||TT.running;
+  $('tttrgo').innerHTML=pick.length?`Scan ${pick.length} ${names[col]} token${pick.length>1?'s':''} from GMGN: <b>${pick.map(x=>esc(x.sym||short(x.m))).join(', ')}</b>`:`No ${names[col]} tokens on screen in GMGN Trenches`}
+if(typeof chrome!=='undefined'&&chrome.storage&&chrome.storage.local&&chrome.runtime&&chrome.runtime.id){
+  chrome.storage.local.get('gm:trenches',r=>{TTR.d=r&&r['gm:trenches']||null;ttTrRender()});
+  chrome.storage.onChanged.addListener((ch,area)=>{if(area==='local'&&ch['gm:trenches']){TTR.d=ch['gm:trenches'].newValue||null;ttTrRender()}});
+  setInterval(ttTrRender,30e3)}
+for(const id of ['tttrn','tttrcol'])$(id).addEventListener('input',()=>{try{localStorage.setItem('tt-tr',JSON.stringify({n:$('tttrn').value,col:$('tttrcol').value}))}catch(e){}ttTrRender()});
+try{const s=JSON.parse(localStorage.getItem('tt-tr')||'null');if(s){$('tttrn').value=s.n||5;$('tttrcol').value=s.col||'migrated'}}catch(e){}
+$('tttrgo').addEventListener('click',()=>{const d=TTR.d;if(!d||TT.running)return;const col=$('tttrcol').value,n=Math.max(1,Math.min(10,Math.floor(+$('tttrn').value)||5)),pick=(d.cols[col]||[]).slice(0,n).map(x=>x.m);
+  if(!pick.length)return;$('ttmint').value=pick.join(',');$('ttform').requestSubmit()});
 $('ttfromtab').addEventListener('click',()=>{$('ttmint').value=$('ttfromtab').dataset.m;$('ttfromtab').hidden=true;$('ttform').requestSubmit()});
 if(typeof chrome!=='undefined'&&chrome.tabs){chrome.tabs.onActivated.addListener(()=>{if(!$('vtt').hidden)ttCheckTab()});chrome.tabs.onUpdated.addListener((id,ch)=>{if(ch.url&&!$('vtt').hidden)ttCheckTab()})}
 

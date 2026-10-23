@@ -51,6 +51,7 @@ html,body{min-height:100%}
     </label>
     <label class="chk"><input type="checkbox" id="openloss" checked> Count never-sold tokens as losses <span class="hint">(only when today's price isn't available; otherwise they're valued at today's price)</span></label>
     <label class="chk"><input type="checkbox" id="nodev"> Leave out tokens this wallet created <span class="tag devt">DEV</span></label>
+    <label class="chk"><input type="checkbox" id="maxtf" checked> Suggest a max trades per token <span class="hint">(copy only the first 1, 2, 3 or 5 buy-ins on each token, when that does better than copying every re-entry)</span></label>
     <label class="chk"><input type="checkbox" id="agef" checked> Suggest a token age filter <span class="hint">(min / max time since the token was created, when it clearly does better)</span></label>
     <label class="chk"><input type="checkbox" id="autocheck"> Check round-trips &amp; entry spikes automatically <span class="hint">(about 20 Helius credits per token)</span></label>
     <label class="chk"><input type="checkbox" id="chkall" checked> Check spikes &amp; round-trips on all analyzed tokens <span class="hint">(not just the ones in filters, so every token can get a label on GMGN; the score still only uses tokens in filters)</span></label>
@@ -85,7 +86,7 @@ html,body{min-height:100%}
   <input type="text" id="addr" placeholder="Paste a Solana wallet (or a list, one per line)" spellcheck="false" aria-label="Wallet address">
   <button type="submit" id="go">Score</button>
 </form>
-<div class="wrow"><label class="lastn">Analyze tokens <input type="number" id="lastn" min="5" step="5" value="50"></label>
+<div class="wrow"><label class="lastn">Analyze tokens <input type="number" id="lastn" min="5" step="5" value="50"></label><label class="lastn" title="If the wallet stopped buying for this many days and then came back, only the tokens bought after that break are analyzed. Blank or 0 = off.">Skip tokens before a break of <input type="number" id="wgapd" min="0" step="1" placeholder="off"> days</label>
 <div class="wchks"><label class="chk autotab" title="When the GMGN tab you're on shows a wallet page (or a token page filtered to a wallet), score that wallet right away. Saved wallets open free and only fetch new trades."><input type="checkbox" id="autotab"> Auto-check the wallet page I'm on</label>
 <label class="chk autotab" title="Run the round-trip &amp; spike check on every wallet you analyze (about 20 Helius credits per token)"><input type="checkbox" id="wautochk"> Auto-check spikes &amp; round-trips</label>
 <label class="wscope" title="Which tokens the spike &amp; round-trip check covers (automatic or with the Check button). Tokens in filters are the ones that count in the score; all tokens also gives every token a label on GMGN.">Check <select id="wchkscope"><option value="all">all analyzed tokens</option><option value="kept">only tokens in filters</option></select></label></div></div>
@@ -167,6 +168,8 @@ html,body{min-height:100%}
     <button type="submit" id="ttgo">Find</button>
   </form>
   <button type="button" id="ttfromtab" class="suggest" hidden></button>
+  <div class="tttrench" id="tttrench" hidden><button type="button" class="suggest" id="tttrgo"></button>
+    <span class="hint">Scan the first <input type="number" id="tttrn" min="1" max="10" value="5" aria-label="How many tokens"> tokens in <select id="tttrcol" aria-label="Column"><option value="migrated">Migrated</option><option value="almost">Almost bonded</option><option value="new">New</option></select> on the GMGN Trenches page (merged into one list)</span></div>
   <label class="chk ttauto" title="When the GMGN tab you're on switches to another token, check it right away (Top traders or Holders, whichever is selected)"><input type="checkbox" id="ttautotok"> Auto-check tokens I open on GMGN</label>
   <div class="ttopts" id="ttopts-tt">
     <label>Show <select id="ttn"><option value="25">Top 25</option><option value="50" selected>Top 50</option><option value="75">Top 75</option><option value="100">Top 100</option></select></label>
@@ -288,7 +291,7 @@ html,body{min-height:100%}
   </section>
 </div>
 
-<script>window.WS_WEB_VERSION="1.31.0"</script>
+<script>window.WS_WEB_VERSION="1.35.0"</script>
 <script src="app-shim.js"></script>
 <script src="engine.js"></script>
 <script src="panel.js"></script>

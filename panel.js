@@ -28,16 +28,17 @@ $('upd').addEventListener('click',async()=>{
   chrome.runtime.reload()});
 updCheck();setInterval(updCheck,60000);
 window.addEventListener('focus',updCheck);document.addEventListener('visibilitychange',()=>{if(!document.hidden)updCheck()});
-const RULES_V=29; // scoring-code version: bump whenever adjustScore or the filter search changes, so saved scores get recomputed
+const RULES_V=31; // scoring-code version: bump whenever adjustScore or the filter search changes, so saved scores get recomputed
 const rulesV=()=>RULES_V+':'+scVer(); // also changes when you edit Custom scoring
-const DEF={agef:true,gmgn:true,chkall:true,lsauto:true,autotab:false,period:0,rsmin:0,lastn:50,minn:10,slip:0,openloss:true,autocheck:false,nodev:false,maxr:0,offplat:[],adj:true};
+const DEF={maxtf:true,gapd:14,agef:true,gmgn:true,chkall:true,lsauto:true,autotab:false,period:0,rsmin:0,lastn:50,minn:10,slip:0,openloss:true,autocheck:false,nodev:false,maxr:0,offplat:[],adj:true};
 let SET={...DEF};try{SET={...DEF,...JSON.parse(store.get('ws-set')||'{}')}}catch(e){}
 const saveSet=()=>store.set('ws-set',JSON.stringify(SET));
 function cleanKey(v){v=(v||'').trim();const m=v.match(/api-key=([0-9a-fA-F-]{20,})/);return m?m[1]:v}
 const getKey=()=>hkActive(); // the first key that still has credits (see engine.js)
-function opts(){return {opp:true,lastN:Math.max(5,Math.floor(SET.lastn)||50),days:0,slip:Math.max(0,+SET.slip||0)/100,minN:Math.max(3,Math.floor(SET.minn)||10),openLoss:!!SET.openloss,noDev:!!SET.nodev,maxRounds:+SET.maxr||0,offPlat:Array.isArray(SET.offplat)?SET.offplat:[],hide:true,winWeight:2,supply:1e9,qsLow:true,ageF:SET.agef!==false}}
+function opts(){return {opp:true,lastN:Math.max(5,Math.floor(SET.lastn)||50),days:0,slip:Math.max(0,+SET.slip||0)/100,minN:Math.max(3,Math.floor(SET.minn)||10),openLoss:!!SET.openloss,noDev:!!SET.nodev,maxRounds:+SET.maxr||0,offPlat:Array.isArray(SET.offplat)?SET.offplat:[],hide:true,winWeight:2,supply:1e9,qsLow:true,ageF:SET.agef!==false,gapD:Math.max(0,+SET.gapd||0)}}
 
-$('lastn').value=SET.lastn;$('minn').value=SET.minn;$('slip').value=SET.slip;$('openloss').checked=SET.openloss;$('autocheck').checked=SET.autocheck;$('nodev').checked=SET.nodev;$('agef').checked=SET.agef!==false;$('maxr').value=String(SET.maxr||0);
+$('wgapd').value=+SET.gapd||'';$('wgapd').addEventListener('change',()=>{SET.gapd=Math.max(0,Math.floor(+$('wgapd').value||0));$('wgapd').value=SET.gapd||'';saveSet();rerender()});
+$('lastn').value=SET.lastn;$('minn').value=SET.minn;$('slip').value=SET.slip;$('openloss').checked=SET.openloss;$('autocheck').checked=SET.autocheck;$('nodev').checked=SET.nodev;$('agef').checked=SET.agef!==false;$('maxtf').checked=SET.maxtf!==false;$('maxr').value=String(SET.maxr||0);
 /* ---------- Helius keys: one row per key with its estimated credits this cycle ---------- */
 const fmtK=n=>n>=1e6?(+(n/1e6).toFixed(2))+'M':n>=1e3?(+(n/1e3).toFixed(n>=1e5?0:1))+'K':String(Math.round(n));
 const ordD=d=>d+(d>=11&&d<=13?'th':['th','st','nd','rd'][d%10]||'th');
@@ -66,7 +67,7 @@ hkSave(hkLoad());setTimeout(hkRender,0);setInterval(hkRender,5000); // after the
 $('maxr').addEventListener('change',()=>{SET.maxr=+$('maxr').value;saveSet();rerender()});
 for(const id of ['lastn','minn','slip'])$(id).addEventListener('change',()=>{SET[id]=+$(id).value;saveSet();if(id!=='lastn')rerender();else status('Analyze tokens: applies the next time you press Score.')});
 delete SET.adj; // replaced by Settings → Scoring
-for(const id of ['openloss','autocheck','nodev','agef'])$(id).addEventListener('change',()=>{SET[id]=$(id).checked;saveSet();rerender()});
+for(const id of ['openloss','autocheck','nodev','agef','maxtf'])$(id).addEventListener('change',()=>{SET[id]=$(id).checked;saveSet();rerender()});
 // the Wallet tab's "Auto-check spikes & round-trips" is the same setting as Settings → Check round-trips & entry spikes automatically
 $('chkall').checked=SET.chkall!==false;$('wchkscope').value=SET.chkall!==false?'all':'kept';
 $('chkall').addEventListener('change',()=>{SET.chkall=$('chkall').checked;$('wchkscope').value=SET.chkall?'all':'kept';saveSet();rerender()});
@@ -274,6 +275,13 @@ function ageFilter(f,U,o){
   if(!best)return f;
   return {...f,alo:E[best.a],ahi:E[best.b],n:best.s.n,win:best.s.win,pnl:best.s.pnl,ageGain:{from:cur,to:best.s}};
 }
+// max trades per token: how many buy-ins on the same token to copy (1st, 2nd, 3rd…), from the trades inside the filters.
+// Suggested when the wallet re-enters tokens and copying only the first K clearly does better than copying every re-entry.
+function maxTradesOf(A){
+  if(!A.best||SET.maxtf===false)return null;const cur=A.o.maxRounds||0;if(cur)return {K:cur,inUse:true};
+  const st=roundStudy(A.keptList,A.o);if(st.re<2||!st.best||!st.best.K)return null;const all=st.ks.find(k=>k.K===0);if(!all)return null;
+  const gain=st.best.pnl-all.pnl;if(gain<0.2||gain<Math.abs(all.pnl)*0.1)return null;
+  return {K:st.best.K,pnl:st.best.pnl,win:st.best.win,allPnl:all.pnl,allWin:all.win,re:st.re}}
 function trimWeakEdges(best,U,o){
   if(!best)return {best,trims:[]};
   const f={...best},trims=[];
@@ -342,12 +350,14 @@ function rerender(){if(!CUR)return;const A=analyze();CUR.A=A;
   const wl=$('wlink');wl.href='https://gmgn.ai/sol/address/'+encodeURIComponent(CUR.wallet);wl.textContent=short(CUR.wallet)+' on GMGN ↗';
   // filters
   const f=A.best;
-  $('filters').innerHTML=f?[['Min market cap',f.lo?fm(f.lo):'$0',f.lo],['Max market cap',fm(f.hi),f.hi],['Min SOL buy',f.slo?fmS(f.slo):'0 SOL',f.slo],['Max SOL buy',fmS(f.shi),f.shi]].concat(f.alo!=null?[['Min token age',f.alo?fmAge(f.alo):'Any',f.alo?fmAge(f.alo):''],['Max token age',fmAge(f.ahi),f.ahi===Infinity?'':fmAge(f.ahi)]]:[])
+  $('filters').innerHTML=f?[['Min market cap',f.lo?fm(f.lo):'$0',f.lo],['Max market cap',fm(f.hi),f.hi],['Min SOL buy',f.slo?fmS(f.slo):'0 SOL',f.slo],['Max SOL buy',fmS(f.shi),f.shi]].concat(f.alo!=null?[['Min token age',f.alo?fmAge(f.alo):'Any',f.alo?fmAge(f.alo):''],['Max token age',fmAge(f.ahi),f.ahi===Infinity?'':fmAge(f.ahi)]]:[]).concat((()=>{const m=maxTradesOf(A);return m?[['Max trades per token',String(m.K)+(m.inUse?' (your setting)':''),m.K]]:[]})())
     .map(([n,v,raw])=>`<button type="button" class="fv" data-copy="${raw===Infinity?'':esc(raw)}"><span class="k">${n}</span><span class="v">${esc(v)}</span></button>`).join('')
     :'<p class="empty">Not enough trades to pick filters.</p>';
   $('kpis').innerHTML=[['Profit',sol(k.pnl),cls(k.pnl)],['Return',pct(k.roi),cls(k.roi)],['Trades kept',`${k.n}/${b.n}`,'']]
     .map(([n,v,c])=>`<div class="kpi"><span class="k">${n}</span><span class="v ${c}">${v}</span></div>`).join('')+
     (f?`<div class="kpi"><span class="k">All trades</span><span class="v ${cls(b.pnl)}">${sol(b.pnl)}</span></div><div class="kpi"><span class="k">All win rate</span><span class="v">${Math.round(b.win*100)}%</span></div>`:'');
+  {const m=maxTradesOf(A);if(m&&!m.inUse)$('kpis').innerHTML+=`<p class="tipline mtnote"><span class="tag age">Max trades per token</span> It buys some tokens more than once (${m.re} in these filters). Copying only the first <b>${m.K}</b> buy${m.K>1?'s':''} per token: <b class="${cls(m.pnl)}">${sol(m.pnl)}</b> at ${Math.round(m.win*100)}% win, vs ${sol(m.allPnl)} copying every buy. <button type="button" class="linkbtn mtuse" data-k="${m.K}">Use it</button></p>`}
+  {const g=gapCut(A.trades.filter(t=>!(A.o.hide&&t.route)),A.o.gapD);if(g.n)$('kpis').innerHTML+=`<p class="tipline">Back from a break: no buys for <b>${g.days} days</b> before ${new Date(g.at*1000).toLocaleDateString(undefined,{month:'short',day:'numeric'})}, so the ${g.n} older token${g.n>1?'s':''} before it ${g.n>1?'are':'is'} left out. Change it next to Analyze tokens.</p>`}
   if(A.trims&&A.trims.length)$('kpis').innerHTML+=`<p class="tipline trimnote">Skips weak ranges: ${A.trims.map(esc).join(' · ')}.</p>`;
   if(f&&f.ageGain){const a=f.ageGain.from,b=f.ageGain.to;$('kpis').innerHTML+=`<p class="tipline agenote"><span class="tag age">Token age</span> Only tokens ${f.alo?fmAge(f.alo)+' to '+fmAge(f.ahi):'under '+fmAge(f.ahi)} old when it bought${f.alo&&f.ahi===Infinity?'':''}: ${Math.round(a.win*100)}% → <b>${Math.round(b.win*100)}%</b> win, ${sol(a.pnl)} → <b class="${cls(b.pnl)}">${sol(b.pnl)}</b> (${a.n-b.n} trade${a.n-b.n>1?'s':''} left out).</p>`}
   {const fast=A.U.filter(t=>isQS(t)&&!isQSLow(t)),fin=A.best?fast.filter(t=>inF(t,A.best)):fast;
@@ -358,6 +368,7 @@ function rerender(){if(!CUR)return;const A=analyze();CUR.A=A;
   renderSZ(A);renderPL(A);renderRT(A);renderRE(A);renderToks(A);
   $('foot').innerHTML=`Trades up to ${CUR.pulled?esc(ago(CUR.pulled))+' ago':'now'} · <button type="button" class="linkbtn footup" id="footup">update</button> · `+esc(`Last ${A.o.lastN} tokens bought · fill gap ${Math.round(A.o.slip*100)}% · ${A.o.openLoss?'unsold counted as losses':'unsold left out'}${A.o.offPlat.length?' · without '+A.o.offPlat.join(', '):''}`);
 }
+document.addEventListener('click',e=>{const u=e.target.closest('.mtuse');if(!u)return;SET.maxr=+u.dataset.k;saveSet();try{$('maxr').value=String(SET.maxr)}catch(x){}rerender()});
 $('filters').addEventListener('click',e=>{const b=e.target.closest('.fv');if(!b)return;const v=b.dataset.copy;
   if(navigator.clipboard)navigator.clipboard.writeText(v).catch(()=>{});
   const k=b.querySelector('.k'),old=k.textContent;b.classList.add('copied');k.textContent=v?'Copied':'No max: leave blank';setTimeout(()=>{b.classList.remove('copied');k.textContent=old},1100)});
@@ -472,12 +483,12 @@ $('plbody').addEventListener('click',e=>{const b=e.target.closest('.pl');if(!b||
 /* ---------- re-entries: same token bought again after selling out ---------- */
 function renderRE(A){
   const st=roundStudy(A.keptList,A.o),card=$('recard');
-  if(!st.n||!st.re){card.hidden=!st.n;$('rebody').innerHTML=st.n?`<p class="empty">Never bought a token again after selling out${A.best?' (in filters)':''}. "Max trades per token" makes no difference.</p>`:'';return}
-  card.hidden=false;const cur=A.o.maxRounds||0,lab=['1st trade','2nd trade','3rd+'];
-  $('rebody').innerHTML=`<p class="tipline" style="margin:0 0 8px">${st.re} of ${st.n} tokens${A.best?' in filters':''} were bought again after selling out.</p>
-    <div class="rtgrid">${st.by.map((b,i)=>b.n?`<div class="rt"><div class="k">${lab[i]}</div><div class="v ${cls(b.pnl)}">${sol(b.pnl)}</div><div class="s">${b.n} trades · ${Math.round(b.w/b.n*100)}% win</div></div>`:'').join('')}</div>
+  if(!st.n||!st.re){card.hidden=!st.n;$('rebody').innerHTML=st.n?`<p class="empty">Bought every token${A.best?' in filters':''} only once. "Max trades per token" makes no difference.</p>`:'';return}
+  card.hidden=false;const cur=A.o.maxRounds||0,lab=['1st buy','2nd buy adds','3rd+ buys add'];
+  $('rebody').innerHTML=`<p class="tipline" style="margin:0 0 8px">${st.re} of ${st.n} tokens${A.best?' in filters':''} were bought more than once. Each button is what a copy bot makes when it copies only the first 1, 2, 3 or 5 buys on a token (and sells the same share when the wallet sells).</p>
+    <div class="rtgrid">${st.by.map((b,i)=>b.n?`<div class="rt"><div class="k">${lab[i]}</div><div class="v ${cls(b.pnl)}">${sol(b.pnl)}</div><div class="s">${b.n} token${b.n>1?'s':''}${i===0?' · '+Math.round(b.win*100)+'% win':''}</div></div>`:'').join('')}</div>
     <div class="ks">${st.ks.map(k=>`<button type="button" class="kbtn${k===st.best?' best':''}${k.K===cur?' on':''}" data-k="${k.K}" title="${Math.round(k.win*100)}% win rate"><span>${k.K||'All'}</span><b class="${cls(k.pnl)}">${sol(k.pnl)}</b></button>`).join('')}</div>
-    <p class="tipline">Best: copy <b>${st.best.K?'up to '+st.best.K+' trade'+(st.best.K>1?'s':'')+' per token':'every trade'}</b>. Tap a number to apply it here.</p>`;
+    <p class="tipline">Best: copy <b>${st.best.K?'up to '+st.best.K+' buy'+(st.best.K>1?'s':'')+' per token':'every buy'}</b>.${cur&&cur!==st.best.K?` <span class="amb">Your setting (${cur}) is in use.</span>`:''} Tap a number to apply it here.</p>`;
 }
 $('rebody').addEventListener('click',e=>{const b=e.target.closest('.kbtn');if(!b)return;SET.maxr=+b.dataset.k;saveSet();$('maxr').value=String(SET.maxr);rerender()});
 

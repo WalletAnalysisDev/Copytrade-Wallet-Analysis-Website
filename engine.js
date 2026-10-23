@@ -2,12 +2,20 @@
 /* Analysis engine shared with the Copytrade Filter Finder page (same math, same Helius calls). */
 const SOLS=new Set(['SOL','So11111111111111111111111111111111111111112']);
 const STABLE=new Set(['EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v','Es9vMFrzaCERmJfrF4H2FYD4KCoNkY4FNULp9N7bEwh']);
+/* a copy bot with "max buys per token" = K: it copies the wallet's first K buys on a token and sells the same share of its
+   position whenever the wallet sells. ev = the wallet's buys (+1) and sells (−1) on the token, oldest first: [time, dir, SOL, tokens] */
+function copyK(ev,K){let H=0,C=0,cost=0,proc=0,qIn=0,qOut=0,nb=0;
+  for(const [ts,dir,sl,q] of ev){if(dir>0){nb++;H+=q;if(nb<=K){C+=q;cost+=sl;qIn+=q}}
+    else if(H>0&&q>0){const f=Math.min(1,q/H),cq=C*f,px=sl/q;proc+=cq*px;qOut+=cq;C-=cq;H-=Math.min(q,H)}}
+  return {cost,proc,qIn,qOut}}
+const nBuys=ev=>ev?ev.filter(e=>e[1]>0).length:0;
 function hydrate(raw,px,o){
   return raw.map(a=>{const mcap=a[4]*(a[16]||o.supply);
     // how much of the position has been closed: tokens sold or sent away, over tokens bought or received
     let qIn=(a[9]||0)+(a[24]||0),qOut=(a[10]||0)+(a[25]||0),cost=a[12],proc=a[13];
-    const R=a[26]||null,K=o.maxRounds||0,cut=!!(K&&R&&R.length>K);
-    if(cut){const r=R.slice(0,K);cost=r.reduce((x,y)=>x+y[1],0);proc=r.reduce((x,y)=>x+y[2],0);qIn=r.reduce((x,y)=>x+y[3],0);qOut=r.reduce((x,y)=>x+y[4],0)} // only the first K trades on this token are copied
+    const R=a[26]||null,EV=a[29]||null,K=o.maxRounds||0,cut=!!(K&&(EV?nBuys(EV)>K:R&&R.length>K));
+    if(cut){if(EV){const c=copyK(EV,K);cost=c.cost;proc=c.proc;qIn=c.qIn;qOut=c.qOut} // a bot that copies only the wallet's first K buys on this token
+      else{const r=R.slice(0,K);cost=r.reduce((x,y)=>x+y[1],0);proc=r.reduce((x,y)=>x+y[2],0);qIn=r.reduce((x,y)=>x+y[3],0);qOut=r.reduce((x,y)=>x+y[4],0)}} // older saves: first K round trips
     const sold=qIn>0?Math.min(1,qOut/qIn):1;
     let part=sold>=0.95?1:sold; // profit counts only the part that was sold, against what that part cost
     // tokens still (partly) held: value what's left at today's price, so dead bags count as the losses they are
@@ -16,26 +24,27 @@ function hydrate(raw,px,o){
     return {tok:a[0],t:a[1],buyUsd,sellUsd:a[3]*(a[13]?proc/a[13]:1),buySol,sellSol:proc,firstSol:a[5],mcap,est:a[14]>0,sold,
       sellMc:a[10]>0?a[15]/a[10]*(a[16]||o.supply):null,
       pool:a[21]||null,solUsd:a[22]||null,pxIn:a[21]?a[4]:null,pxOut:a[21]&&a[10]>0&&a[15]?a[15]/a[10]:null,lastSell:a[8]||0,
-      R,rounds:R?R.length:1,cut,pool0:a[27]||a[21]||null,platD:platGet()[a[27]||a[21]]||null,plat:platFam(platGet()[a[27]||a[21]])||null,nb:a[6],ns:a[7],tin:a[17]||0,tout:a[18]||0,hold:a[8]?(a[8]-a[1])/60:null,dump:a[28]?(a[28]-a[1])/60:null,last:a[11],ret,open:sold<0.02&&mtm==null,held:mtm!=null?{val:mtm,frac:1-sold}:null,
+      R,ev:EV,buys:EV?nBuys(EV):(a[6]||1),rounds:R?R.length:1,cut,pool0:a[27]||a[21]||null,platD:platGet()[a[27]||a[21]]||null,plat:platFam(platGet()[a[27]||a[21]])||null,nb:a[6],ns:a[7],tin:a[17]||0,tout:a[18]||0,hold:a[8]?(a[8]-a[1])/60:null,dump:a[28]?(a[28]-a[1])/60:null,last:a[11],ret,open:sold<0.02&&mtm==null,held:mtm!=null?{val:mtm,frac:1-sold}:null,
       route:STABLE.has(a[0])||mcap>5e6||(Math.abs(ret)<0.01&&a[6]>=2&&a[7]>=1)}});
 }
 /* most recent N tokens bought (by first buy time), after dropping swap-route tokens */
-function recent(trades,o){let a=trades.filter(t=>!(o.hide&&t.route)&&!(o.noDev&&t.dev)&&!(o.offPlat&&t.plat&&o.offPlat.includes(t.plat)));if(o.lastN&&a.length>o.lastN)a=a.slice().sort((x,y)=>y.t-x.t).slice(0,o.lastN);else if(o.days){const c=Date.now()/1000-o.days*86400;a=a.filter(t=>t.t>=c)}return a}
+/* back from a break: when the wallet went gapD+ days without buying anything, only the tokens bought after that break count */
+function gapCut(a,gapD){if(!gapD||a.length<2)return {keep:a,n:0,days:0};const s=a.slice().sort((x,y)=>y.t-x.t);
+  for(let i=1;i<s.length;i++){const g=(s[i-1].t-s[i].t)/86400;if(g>=gapD)return {keep:s.slice(0,i),n:s.length-i,days:Math.round(g),at:s[i-1].t}}return {keep:a,n:0,days:0}}
+function recent(trades,o){let a=trades.filter(t=>!(o.hide&&t.route)&&!(o.noDev&&t.dev)&&!(o.offPlat&&t.plat&&o.offPlat.includes(t.plat)));if(o.gapD)a=gapCut(a,o.gapD).keep;if(o.lastN&&a.length>o.lastN)a=a.slice().sort((x,y)=>y.t-x.t).slice(0,o.lastN);else if(o.days){const c=Date.now()/1000-o.days*86400;a=a.filter(t=>t.t>=c)}return a}
 /* re-entries: how the wallet's 1st, 2nd, 3rd+ trade on the same token did, and what copying only the first K would make */
-function roundStudy(list,o){
-  const one=r=>{const sold=r[3]>0?Math.min(1,r[4]/r[3]):1,part=sold>=0.95?1:sold,c=r[1]*part;return {c,ret:c>0?r[2]/c-1:0,open:sold<0.02,q:r[3],qo:r[4],cost:r[1],proc:r[2]}};
-  const adj=(x)=>x.open?(o.openLoss?-1:null):(1+x.ret)/(1+o.slip)-1;
-  const by=[0,1,2].map(()=>({n:0,w:0,pnl:0}));let re=0;
-  for(const t of list){const R=t.R;if(!R||!R.length)continue;if(R.length>1)re++;
-    R.forEach((r,i)=>{const x=one(r),rr=adj(x);if(rr==null)return;const b=by[Math.min(i,2)];b.n++;if(isWin(rr))b.w++;b.pnl+=rr*x.c})}
+function roundStudy(list,o){ // what a copy bot makes with "max buys per token" = 1, 2, 3, 5 or no limit, on these trades
+  const adj=x=>x.open?(o.openLoss?-1:null):(1+x.ret)/(1+o.slip)-1;
+  const one=c=>{const sold=c.qIn>0?Math.min(1,c.qOut/c.qIn):1,part=sold>=0.95?1:sold,cc=c.cost*part;return {c:cc,ret:cc>0?c.proc/cc-1:0,open:sold<0.02}};
+  const L=list.filter(t=>t.ev&&t.ev.length);let re=0;for(const t of L)if(t.buys>1)re++;
   const ks=[1,2,3,5,0].map(K=>{let pnl=0,n=0,w=0;
-    for(const t of list){const R=t.R;if(!R||!R.length)continue;const rs=K?R.slice(0,K):R;
-      const x=one([0,rs.reduce((a,b)=>a+b[1],0),rs.reduce((a,b)=>a+b[2],0),rs.reduce((a,b)=>a+b[3],0),rs.reduce((a,b)=>a+b[4],0)]),rr=adj(x);
-      if(rr==null)continue;n++;if(isWin(rr))w++;pnl+=rr*x.c}
+    for(const t of L){const x=one(copyK(t.ev,K||1e9)),rr=adj(x);if(rr==null)continue;n++;if(isWin(rr))w++;pnl+=rr*x.c}
     return {K,n,win:n?w/n:0,pnl}});
+  // what each extra buy adds: the 1st buy alone, then the 2nd, then the 3rd and later ones
+  const at=K=>ks.find(k=>k.K===K),by=[{n:L.length,pnl:at(1).pnl,win:at(1).win},{n:L.filter(t=>t.buys>=2).length,pnl:at(2).pnl-at(1).pnl},{n:L.filter(t=>t.buys>=3).length,pnl:at(0).pnl-at(2).pnl}];
   let best=ks[0];for(const k of ks)if(k.pnl>best.pnl+1e-6)best=k;
-  const maxR=Math.max(1,...list.map(t=>(t.R&&t.R.length)||1));if(best.K&&best.K>=maxR)best=ks[ks.length-1]; // same as copying every trade
-  return {by,re,ks,best,n:list.filter(t=>t.R&&t.R.length).length};
+  const maxB=Math.max(1,...L.map(t=>t.buys||1));if(best.K&&best.K>=maxB)best=ks[ks.length-1]; // same as copying every buy
+  return {by,re,ks,best,n:L.length};
 }
 /* QuickSells Low MC: sold within 5 seconds of buying, entry under $5K market cap. The wallet may book a profit,
    but a copy bot buys a block or two later at a higher price and can't sell that fast, so for the copier it's a loss. */
@@ -545,7 +554,7 @@ function convertPull(tx,meta,px){
       else if(cur){cur[2]+=sl;cur[4]+=q;held-=q;if(!dumpT&&cur===R[0]&&cur[4]>=cur[3]*0.5)dumpT=ts;if(held<=peak*0.05){cur=null;held=0;peak=0}}}
     rows.push([m,fb.t,S(t.b,'usd')+S(ti,'usd'),S(t.s,'usd')+S(to,'usd'),fb.pusd,fb.size,t.b.length,t.s.length,t.s.length?Math.max(...t.s.map(x=>x.t)):0,
       S(t.b,'qty'),S(t.s,'qty'),t.last,S(t.b,'sol')+S(ti,'sol'),S(t.s,'sol')+S(to,'sol'),0,S(t.s,'val'),mt[1],ti.length,to.length,S(ti,'usd'),S(to,'usd'),
-      t.pool||null,fb.p,S(t.s,'valSol'),S(ti,'qty'),S(to,'qty'),R.map(r=>r.map(g)),t.ep||t.pool||null,dumpT||0]);
+      t.pool||null,fb.p,S(t.s,'valSol'),S(ti,'qty'),S(to,'qty'),R.map(r=>r.map(g)),t.ep||t.pool||null,dumpT||0,ev.map(e=>[e[0],e[1],g(e[2]),g(e[3])])]);
   }
   const sorted=px.map(p=>p[1]).sort((a,b)=>a-b);
   return {raw:rows,names,px:sorted.length?sorted[sorted.length>>1]:fallback};
